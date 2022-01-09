@@ -1,4 +1,4 @@
-// Copyright 2022 Developers of the Ferric project.
+// Copyright 2022 The Ferric AI Project Developers
 
 use proc_macro2::Ident as Ident2;
 use proc_macro2::{Delimiter, Group, TokenStream, TokenTree};
@@ -40,17 +40,17 @@ fn make_model_inner(input: TokenStream) -> TokenStream {
     let mut var_init_names = Vec::<Ident>::new(); // initialized_<variable name>
     let mut var_eval_names = Vec::<Ident>::new(); // eval_<variable name>
     let mut var_eval_dist_names = Vec::<Ident>::new(); // evaldist_<variable name>
-    // for all query <variable name> statements
+                                                       // for all query <variable name> statements
     let mut query_names = Vec::<Ident>::new(); // <variable name>
     let mut query_type_names = Vec::<Ident>::new(); // <variable's type name>
     let mut query_eval_var_names = Vec::<Ident>::new(); // eval_<variable name>
-    // for all observe <variable name> statements
+                                                        // for all observe <variable name> statements
     let mut obs_names = Vec::<Ident>::new(); // <variable name>
     let mut obs_var_names = Vec::<Ident>::new(); // var_<variable name>
     let mut obs_type_names = Vec::<Ident>::new(); // <variable's type name>
     let mut obs_obs_names = Vec::<Ident>::new(); // obs_<variable name>
     let mut obs_eval_names = Vec::<Ident>::new(); // eval_<variable name>
-    // process all the let statements
+                                                  // process all the let statements
     for stmt in out.stmts.iter() {
         var_names_set.insert(stmt.var_name.to_string());
         let var_name = format_ident!("var_{}", &stmt.var_name);

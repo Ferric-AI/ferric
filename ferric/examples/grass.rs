@@ -1,5 +1,6 @@
-use std::time::Instant;
+// Copyright 2022 The Ferric AI Project Developers
 use ferric::make_model;
+use std::time::Instant;
 
 make_model! {
     mod grass;
@@ -27,7 +28,7 @@ make_model! {
 }
 
 fn main() {
-    let model = grass::Model {grass_wet: true};
+    let model = grass::Model { grass_wet: true };
     let mut num_rain = 0;
     let mut num_sprinkler = 0;
     let num_samples = 100000;
