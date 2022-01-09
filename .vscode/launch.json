@@ -1,0 +1,139 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'grass' package 'ferric-macros'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=grass",
+                    "--package=ferric-macros"
+                ],
+                "filter": {
+                    "name": "grass",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'grass' package 'ferric-macros'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=grass",
+                    "--package=ferric-macros"
+                ],
+                "filter": {
+                    "name": "grass",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'smoke' in package 'ferric-macros'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=smoke",
+                    "--package=ferric-macros"
+                ],
+                "filter": {
+                    "name": "smoke",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'ferric'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=ferric"
+                ],
+                "filter": {
+                    "name": "ferric",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'grass' in package 'ferric'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=grass",
+                    "--package=ferric"
+                ],
+                "filter": {
+                    "name": "grass",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'grass' package 'ferric'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=grass",
+                    "--package=ferric"
+                ],
+                "filter": {
+                    "name": "grass",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'grass' package 'ferric'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=grass",
+                    "--package=ferric"
+                ],
+                "filter": {
+                    "name": "grass",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

@@ -1,0 +1,97 @@
+{
+    "version": "2.0.0",
+    "tasks": [{
+     "label": "cargo build",
+     "type": "shell",
+     "command": "cargo build",
+     "args": [],
+     "group": {
+       "kind": "build",
+       "isDefault": true
+     }
+    },
+    {
+      "label": "cargo fmt",
+      "type": "shell",
+      "command": "cargo fmt",
+      "args": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+     },
+     {
+      "label": "cargo test",
+      "type": "shell",
+      "command": "cargo test",
+      "args": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "expand example",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "expand",
+        "--example",
+        "${input:exampleName}",
+        "--package",
+        "ferric"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "run example",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "run",
+        "--release",
+        "--example",
+        "${input:exampleName}",
+        "--package",
+        "ferric"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "run test",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "test",
+        "--test",
+        "${input:testName}",
+        "--package",
+        "ferric"
+        ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }],
+    "inputs":
+    [
+      {
+        "id": "exampleName",
+        "description": "Example name without the file suffix",
+        "default": "grass",
+        "type": "promptString",
+      },
+      {
+        "id": "testName",
+        "description": "Test name without the file suffix",
+        "default": "grass",
+        "type": "promptString",
+      },
+    ],
+  }
