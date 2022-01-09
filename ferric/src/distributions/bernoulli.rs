@@ -1,4 +1,4 @@
-// Copyright 2022 Developers of the Ferric project.
+// Copyright 2022 The Ferric AI Project Developers
 
 use crate::distributions::Distribution;
 use rand::Rng;

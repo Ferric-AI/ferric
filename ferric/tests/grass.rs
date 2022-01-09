@@ -1,3 +1,4 @@
+// Copyright 2022 The Ferric AI Project Developers
 use ferric::make_model;
 
 // Test the simple Bayesian Network from Wikipedia:
@@ -30,11 +31,16 @@ fn grass() {
         observe grass_wet;
     };
 
-    let model = grass::Model {grass_wet : true};
+    let model = grass::Model { grass_wet: true };
     let num_samples = 100000;
     let ans = 0.3577f64;
     let err = 5.0 * (ans * (1.0 - ans) / (num_samples as f64)).sqrt(); // 5 sigma error
-    let post_rain = (model.sample_iter().take(num_samples).map(|x| x.rain as isize).sum::<isize>() as f64) / (num_samples as f64);
+    let post_rain = (model
+        .sample_iter()
+        .take(num_samples)
+        .map(|x| x.rain as isize)
+        .sum::<isize>() as f64)
+        / (num_samples as f64);
     println!("post_rain is {}", post_rain);
     assert!(post_rain > (ans - err) && post_rain < (ans + err));
 }
