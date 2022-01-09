@@ -1,24 +1,6 @@
-[![Github Actions Tests](https://github.com/ferric-ai/ferric/actions/workflows/ci.yml/badge.svg)](https://github.com/Ferric-AI/ferric/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/ferric.svg)](https://crates.io/crates/ferric)
-[![Coverage Status](https://coveralls.io/repos/github/Ferric-AI/ferric/badge.svg)](https://coveralls.io/github/Ferric-AI/ferric)
-
-# Ferric
-A Probabilistic Programming Language in Rust with a declarative syntax.
-
-## Usage
-
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-ferric = "0.1"
-```
-
-## Example
-
-```rust
-use std::time::Instant;
+// Copyright 2022 The Ferric AI Project Developers
 use ferric::make_model;
+use std::time::Instant;
 
 make_model! {
     mod grass;
@@ -46,7 +28,7 @@ make_model! {
 }
 
 fn main() {
-    let model = grass::Model {grass_wet: true};
+    let model = grass::Model { grass_wet: true };
     let mut num_rain = 0;
     let mut num_sprinkler = 0;
     let num_samples = 100000;
@@ -68,19 +50,3 @@ fn main() {
         num_samples,
     );
 }
-```
-
-## License
-
-Licensed under either of
-
- * [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
- * [MIT license](http://opensource.org/licenses/MIT)
-
-at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
-dual licensed as above, without any additional terms or conditions.
