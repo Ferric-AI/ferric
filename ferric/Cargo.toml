@@ -9,7 +9,7 @@ readme = "../README.md"
 repository = "https://github.com/ferric-ai/ferric"
 homepage = "https://ferric.ai"
 keywords = ["probabilistic", "programming", "generative", "bayesian", "mcmc"]
-categories = ["math", "science"]
+categories = ["mathematics", "science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
