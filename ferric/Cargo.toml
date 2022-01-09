@@ -8,13 +8,13 @@ description = "A Probablistic Programming Language with a declarative syntax for
 readme = "../README.md"
 repository = "https://github.com/ferric-ai/ferric"
 homepage = "https://ferric.ai"
-keywords = ["probabilistic-programming", "generative", "random", "sampling", "statistics", "probability", "modeling", "bayesian", "language", "learning", "inference", "mcmc"]
+keywords = ["probabilistic-programming", "generative", "sampling", "bayesian", "mcmc"]
 categories = ["math", "science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ferric-macros = {path="../ferric-macros"}
+ferric-macros = {path="../ferric-macros", version = "0.1.0"}
 rand = "0.8.0"
 
 [dev-dependencies]
