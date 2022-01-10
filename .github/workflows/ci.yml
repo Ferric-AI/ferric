@@ -1,4 +1,4 @@
-name: Ferric
+name: Tests
 on:
   pull_request:
   push:
