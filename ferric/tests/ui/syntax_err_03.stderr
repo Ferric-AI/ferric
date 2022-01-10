@@ -1,0 +1,11 @@
+error: expected let | observe | query
+ --> tests/ui/syntax_err_03.rs:8:5
+  |
+8 |     letu rain : bool ~ Bernoulli::new( 0.2 );
+  |     ^^^^
+
+error[E0433]: failed to resolve: use of undeclared crate or module `grass`
+  --> tests/ui/syntax_err_03.rs:30:18
+   |
+30 |     let _model = grass::Model { grass_wet: true };
+   |                  ^^^^^ use of undeclared crate or module `grass`
