@@ -41,6 +41,7 @@ mod tests {
     fn bernoulli_sample() {
         let mut rng = thread_rng();
         let dist = Bernoulli::new(0.1).unwrap();
+        println!("dist = {}", dist);
         let mut succ = 0;
         let trials = 10000;
         for _ in 0..trials {

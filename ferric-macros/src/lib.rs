@@ -4,8 +4,11 @@ use proc_macro2::Ident as Ident2;
 use proc_macro2::{Delimiter, Group, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use std::collections::HashSet;
-use syn::parse::{Parse, ParseStream, Result};
-use syn::{parse2, Error, Expr, Ident, Token};
+use syn::{parse2, Ident};
+
+mod parse;
+use crate::parse::ModelAst;
+
 //
 // Parse statements such as the following
 //   let rain ~ Bernoulli(0.2);
@@ -17,18 +20,18 @@ pub fn make_model(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn make_model_inner(input: TokenStream) -> TokenStream {
-    let out = parse2::<ModelStmts>(input);
-    let out = match out {
+    let ast = parse2::<ModelAst>(input);
+    let ast = match ast {
         Ok(data) => data,
         Err(err) => {
             return err.to_compile_error();
         }
     };
-    let model_name = out.model_name;
+    let model_name = ast.model_name;
 
     // process all the use statements;
     let mut use_names = Vec::<TokenStream>::new();
-    for use_expr in out.use_exprs.iter() {
+    for use_expr in ast.use_exprs.iter() {
         let use_name = quote! {use #use_expr};
         use_names.push(use_name);
     }
@@ -51,7 +54,7 @@ fn make_model_inner(input: TokenStream) -> TokenStream {
     let mut obs_obs_names = Vec::<Ident>::new(); // obs_<variable name>
     let mut obs_eval_names = Vec::<Ident>::new(); // eval_<variable name>
                                                   // process all the let statements
-    for stmt in out.stmts.iter() {
+    for stmt in ast.stmts.iter() {
         var_names_set.insert(stmt.var_name.to_string());
         let var_name = format_ident!("var_{}", &stmt.var_name);
         var_names.push(var_name.clone());
@@ -64,12 +67,12 @@ fn make_model_inner(input: TokenStream) -> TokenStream {
         var_eval_dist_names.push(eval_dist_var.clone());
         // if this variable is being queried then we need to store these
         // generate tokens in query-specific lists
-        if out.queries.contains(&stmt.var_name) {
+        if ast.queries.contains(&stmt.var_name) {
             query_names.push(stmt.var_name.clone());
             query_type_names.push(stmt.type_name.clone());
             query_eval_var_names.push(eval_var.clone());
         }
-        if out.observes.contains(&stmt.var_name) {
+        if ast.observes.contains(&stmt.var_name) {
             obs_names.push(stmt.var_name.clone());
             obs_type_names.push(stmt.type_name.clone());
             obs_var_names.push(var_name.clone());
@@ -79,11 +82,11 @@ fn make_model_inner(input: TokenStream) -> TokenStream {
     }
 
     // TODO: check that a variable doesn't have a duplicate definition
-    // TODO: check that query_name is identical to out.queries
+    // TODO: check that query_name is identical to ast.queries
 
     // once we have all the variable names then we can replace them
     let mut eval_dist_exprs = Vec::<TokenStream>::new();
-    for stmt in out.stmts.iter() {
+    for stmt in ast.stmts.iter() {
         let eval_dist_dep = &stmt.dependency;
         let modified_eval_dist_dep = replace(quote! {#eval_dist_dep}, &var_names_set);
         eval_dist_exprs.push(modified_eval_dist_dep);
@@ -214,81 +217,7 @@ fn replace(dep_tokens: TokenStream, var_names_set: &HashSet<String>) -> TokenStr
         .collect()
 }
 
-struct Stmt {
-    var_name: Ident,
-    type_name: Ident,
-    dependency: Expr,
-}
-
-struct ModelStmts {
-    model_name: Ident,
-    use_exprs: Vec<Expr>,
-    stmts: Vec<Stmt>,
-    queries: Vec<Ident>,
-    observes: Vec<Ident>,
-}
-
-impl Parse for ModelStmts {
-    fn parse(input: ParseStream) -> Result<Self> {
-        // mod model_name;
-        input.parse::<Token![mod]>()?;
-        let model_name: Ident = input.parse()?;
-        input.parse::<Token![;]>()?;
-
-        let mut stmts = Vec::<Stmt>::new();
-        let mut use_exprs = Vec::<Expr>::new();
-        let mut queries = Vec::<Ident>::new();
-        let mut observes = Vec::<Ident>::new();
-
-        while !input.is_empty() {
-            // let var_name ~ dep_expr;
-            if input.peek(Token![let]) {
-                input.parse::<Token![let]>()?;
-                let var_name: Ident = input.parse()?;
-                input.parse::<Token![:]>()?;
-                let type_name: Ident = input.parse()?;
-                input.parse::<Token![~]>()?;
-                let dependency: Expr = input.parse()?;
-                input.parse::<Token![;]>()?;
-                stmts.push(Stmt {
-                    var_name,
-                    type_name,
-                    dependency,
-                });
-            } else if input.peek(Token![use]) {
-                input.parse::<Token![use]>()?;
-                let use_expr: Expr = input.parse()?;
-                input.parse::<Token![;]>()?;
-                use_exprs.push(use_expr);
-            } else if input.peek(Ident) {
-                let keyword: Ident = input.parse()?;
-                match keyword.to_string().as_ref() {
-                    "observe" => {
-                        // observe var_name;
-                        let var_name: Ident = input.parse()?;
-                        input.parse::<Token![;]>()?;
-                        observes.push(var_name);
-                    }
-                    "query" => {
-                        // query var_name;
-                        let var_name: Ident = input.parse()?;
-                        input.parse::<Token![;]>()?;
-                        queries.push(var_name);
-                    }
-                    _ => {
-                        return Err(Error::new(keyword.span(), "expected let | observe | query"));
-                    }
-                }
-            } else {
-                return Err(input.error("expected let | observe | query"));
-            }
-        }
-        Ok(ModelStmts {
-            model_name,
-            use_exprs,
-            stmts,
-            queries,
-            observes,
-        })
-    }
+#[test]
+fn test_make_model() {
+    make_model_inner(quote!(modu grass;));
 }
