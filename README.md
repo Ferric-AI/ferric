@@ -1,5 +1,4 @@
-[![Build Status](https://github.com/ferric-ai/ferric/workflows/CI/badge.svg)](https://github.com/ferric-ai/ferric/actions)
-[![Coverage Status](https://coveralls.io/repos/github/ferric-ai/ferric/badge.svg?branch=main)](https://coveralls.io/github/ferric-ai/ferric?branch=main)
+![Build](https://github.com/ferric-ai/ferric/actions/workflows/ci.yml/badge.svg?event=push)
 
 # Ferric
 A Probabilistic Programming Language in Rust with a declarative syntax.
