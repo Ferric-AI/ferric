@@ -292,3 +292,51 @@ impl Parse for ModelStmts {
         })
     }
 }
+
+#[test]
+fn test_parse() {
+    make_model_inner(quote!(modu grass;));
+    assert!(parse2::<ModelStmts>(quote!(
+        modu grass;
+    ))
+    .is_err());
+    assert!(parse2::<ModelStmts>(quote!(
+        mod grass;
+        use ferric::distributions::Bernoulli;
+
+        + foo : bool ~ Bernoulli::new( 0.2 );
+    ))
+    .is_err());
+    assert!(parse2::<ModelStmts>(quote!(
+        mod grass;
+        use ferric::distributions::Bernoulli;
+
+        letu rain : bool ~ Bernoulli::new( 0.2 );
+    ))
+    .is_err());
+    assert!(parse2::<ModelStmts>(quote!(
+        mod grass;
+        use ferric::distributions::Bernoulli;
+
+        let rain : bool ~ Bernoulli::new( 0.2 );
+
+        let sprinkler : bool ~
+            if rain {
+                Bernoulli::new( 0.01 )
+            } else {
+                Bernoulli::new( 0.4 )
+            };
+
+        let grass_wet : bool ~ Bernoulli::new(
+            if sprinkler && rain { 0.99 }
+            else if sprinkler && !rain { 0.9 }
+            else if !sprinkler && rain { 0.8 }
+            else { 0.0 }
+        );
+
+        observe grass_wet;
+        query rain;
+        query sprinkler;
+    ))
+    .is_ok());
+}
