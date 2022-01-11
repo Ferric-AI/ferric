@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use syn::{parse2, Ident};
 
 mod parse;
-use crate::parse::ModelStmts;
+use crate::parse::ModelAst;
 
 //
 // Parse statements such as the following
@@ -20,18 +20,18 @@ pub fn make_model(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn make_model_inner(input: TokenStream) -> TokenStream {
-    let out = parse2::<ModelStmts>(input);
-    let out = match out {
+    let ast = parse2::<ModelAst>(input);
+    let ast = match ast {
         Ok(data) => data,
         Err(err) => {
             return err.to_compile_error();
         }
     };
-    let model_name = out.model_name;
+    let model_name = ast.model_name;
 
     // process all the use statements;
     let mut use_names = Vec::<TokenStream>::new();
-    for use_expr in out.use_exprs.iter() {
+    for use_expr in ast.use_exprs.iter() {
         let use_name = quote! {use #use_expr};
         use_names.push(use_name);
     }
@@ -54,7 +54,7 @@ fn make_model_inner(input: TokenStream) -> TokenStream {
     let mut obs_obs_names = Vec::<Ident>::new(); // obs_<variable name>
     let mut obs_eval_names = Vec::<Ident>::new(); // eval_<variable name>
                                                   // process all the let statements
-    for stmt in out.stmts.iter() {
+    for stmt in ast.stmts.iter() {
         var_names_set.insert(stmt.var_name.to_string());
         let var_name = format_ident!("var_{}", &stmt.var_name);
         var_names.push(var_name.clone());
@@ -67,12 +67,12 @@ fn make_model_inner(input: TokenStream) -> TokenStream {
         var_eval_dist_names.push(eval_dist_var.clone());
         // if this variable is being queried then we need to store these
         // generate tokens in query-specific lists
-        if out.queries.contains(&stmt.var_name) {
+        if ast.queries.contains(&stmt.var_name) {
             query_names.push(stmt.var_name.clone());
             query_type_names.push(stmt.type_name.clone());
             query_eval_var_names.push(eval_var.clone());
         }
-        if out.observes.contains(&stmt.var_name) {
+        if ast.observes.contains(&stmt.var_name) {
             obs_names.push(stmt.var_name.clone());
             obs_type_names.push(stmt.type_name.clone());
             obs_var_names.push(var_name.clone());
@@ -82,11 +82,11 @@ fn make_model_inner(input: TokenStream) -> TokenStream {
     }
 
     // TODO: check that a variable doesn't have a duplicate definition
-    // TODO: check that query_name is identical to out.queries
+    // TODO: check that query_name is identical to ast.queries
 
     // once we have all the variable names then we can replace them
     let mut eval_dist_exprs = Vec::<TokenStream>::new();
-    for stmt in out.stmts.iter() {
+    for stmt in ast.stmts.iter() {
         let eval_dist_dep = &stmt.dependency;
         let modified_eval_dist_dep = replace(quote! {#eval_dist_dep}, &var_names_set);
         eval_dist_exprs.push(modified_eval_dist_dep);
