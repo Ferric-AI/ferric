@@ -1,11 +1,11 @@
-error: expected let | use | observe | query
- --> tests/ui/syntax_err_02.rs:8:5
-  |
-8 |     + foo : bool ~ Bernoulli::new( 0.2 );
-  |     ^
+error: undefined query variable `grass_wet2`
+  --> tests/ui/semantic_err_03.rs:28:11
+   |
+28 |     query grass_wet2;
+   |           ^^^^^^^^^^
 
 error[E0433]: failed to resolve: use of undeclared crate or module `grass`
-  --> tests/ui/syntax_err_02.rs:32:18
+  --> tests/ui/semantic_err_03.rs:32:18
    |
 32 |     let _model = grass::Model { grass_wet: true };
    |                  ^^^^^ use of undeclared crate or module `grass`

@@ -1,2 +1,11 @@
+branch: true
+ignore-not-existing: true
 ignore:
   - "/*"
+  - "ferric/examples/*"
+binary-path:
+  - ./target/debug
+source-dir:
+  - .
+output-type: lcov
+output-path: ./lcov.info

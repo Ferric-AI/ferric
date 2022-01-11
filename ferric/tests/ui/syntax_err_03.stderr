@@ -1,4 +1,4 @@
-error: expected let | observe | query
+error: expected let | use | observe | query
  --> tests/ui/syntax_err_03.rs:8:5
   |
 8 |     letu rain : bool ~ Bernoulli::new( 0.2 );

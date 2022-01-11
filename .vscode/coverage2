@@ -1,0 +1,14 @@
+# source based coverage
+# cargo install grcov
+# rustup component add llvm-tools-preview
+export RUSTFLAGS="-Zinstrument-coverage"
+export LLVM_PROFILE_FILE="ferric-%p-%m.profraw"
+cargo clean
+rm lcov.info
+rm -f *.profraw
+rm -fr coverage
+cargo +nightly build --verbose $CARGO_OPTIONS
+cargo +nightly test --all-features --no-fail-fast --verbose $CARGO_OPTIONS -- --skip ui --skip check_formatting --skip check_clippy
+grcov . --llvm --binary-path ./target/debug -s . --ignore="/*" --ignore="ferric/examples/*" -t lcov --branch --ignore-not-existing > lcov.info
+genhtml -o coverage --branch-coverage --show-details --highlight --ignore-errors source --legend lcov.info
+cargo clean

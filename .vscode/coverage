@@ -1,8 +1,11 @@
+cargo clean
+rm lcov.info
+rm -fr coverage
 export CARGO_INCREMENTAL=0
 export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off"
 cargo +nightly build --verbose $CARGO_OPTIONS
 cargo +nightly test --all-features --no-fail-fast --verbose $CARGO_OPTIONS
 
-grcov . --ignore="/*" -t lcov > lcov.info
-genhtml -o coverage --show-details --highlight --ignore-errors source --legend lcov.info
+grcov . --binary-path ./target/debug -s . --ignore="/*" --ignore="ferric/examples/*" -t lcov --branch --ignore-not-existing > lcov.info
+genhtml -o coverage --branch-coverage --show-details --highlight --ignore-errors source --legend lcov.info
 cargo clean
