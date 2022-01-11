@@ -17,8 +17,8 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = {features = ["full"], version="1.0.0"}
+syn = {features = ["full"], version="1.0"}
 rand = "0.8.0"
 
 [dev-dependencies]
-ferric = {path="../ferric"}
+syn = {features = ["full", "extra-traits"], version="1.0"}

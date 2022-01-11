@@ -64,6 +64,15 @@
       }
     },
     {
+      "label": "coverage",
+      "type": "shell",
+      "command": "${workspaceFolder}/.vscode/coverage",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
       "label": "run test",
       "type": "shell",
       "command": "cargo",
