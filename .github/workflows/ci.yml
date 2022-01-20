@@ -37,7 +37,7 @@ jobs:
           profile: minimal
           toolchain: nightly
           override: true
-          components: rustfmt, clippy
+          components: rustfmt, clippy, llvm-tools-preview
       - name: Run tests
         uses: actions-rs/cargo@v1
         with:
@@ -45,14 +45,16 @@ jobs:
           args: --all-features --no-fail-fast
         env:
           CARGO_INCREMENTAL: '0'
-          #RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
-          #RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
           RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off'
           RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off'
-      - id: coverage
-        uses: actions-rs/grcov@v0.1
+      - name: Download grcov v0.8.2
+        run: |
+          wget https://github.com/mozilla/grcov/releases/download/v0.8.2/grcov-linux-x86_64.tar.bz2
+          tar xjf grcov-linux-x86_64.tar.bz2
+      - name: Run grcov
+        run: ./grcov . --binary-path ./target/debug -s . --ignore="/*" --ignore="ferric/examples/*" -t lcov --branch > lcov.info
       - name: Coveralls upload
         uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: ${{ steps.coverage.outputs.report }}
+          path-to-lcov: ./lcov.info

@@ -13,3 +13,6 @@ Cargo.lock
 
 lcov.info
 coverage/
+*.profraw
+
+.DS_Store

@@ -1,0 +1,11 @@
+error: duplicate declaration of variable `sprinkler`
+  --> tests/ui/semantic_err_01.rs:28:9
+   |
+28 |     let sprinkler : bool ~ Bernoulli::new( 0.2 );
+   |         ^^^^^^^^^
+
+error[E0433]: failed to resolve: use of undeclared crate or module `grass`
+  --> tests/ui/semantic_err_01.rs:32:18
+   |
+32 |     let _model = grass::Model { grass_wet: true };
+   |                  ^^^^^ use of undeclared crate or module `grass`

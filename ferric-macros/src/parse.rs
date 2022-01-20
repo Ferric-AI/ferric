@@ -4,15 +4,15 @@ use syn::{Error, Expr, Ident, Token};
 
 /// StmtAst is the Abstract Syntax Tree representation of a single dependency statement.
 pub struct StmtAst {
-    pub var_name: Ident,
-    pub type_name: Ident,
+    pub var_ident: Ident,
+    pub type_ident: Ident,
     pub dependency: Expr,
 }
 
 /// ModelAst is the Abstract Syntax Tree representation of the model.
-/// This represents the output of the parse and the analyze phase in a macro pipeline.
+/// This represents the output of the parse phase in a proc_macro pipeline.
 pub struct ModelAst {
-    pub model_name: Ident,
+    pub model_ident: Ident,
     pub use_exprs: Vec<Expr>,
     pub stmts: Vec<StmtAst>,
     pub queries: Vec<Ident>,
@@ -23,7 +23,7 @@ impl Parse for ModelAst {
     fn parse(input: ParseStream) -> Result<Self> {
         // mod model_name;
         input.parse::<Token![mod]>()?;
-        let model_name: Ident = input.parse()?;
+        let model_ident: Ident = input.parse()?;
         input.parse::<Token![;]>()?;
 
         let mut stmts = Vec::<StmtAst>::new();
@@ -35,15 +35,15 @@ impl Parse for ModelAst {
             // let var_name ~ dep_expr;
             if input.peek(Token![let]) {
                 input.parse::<Token![let]>()?;
-                let var_name: Ident = input.parse()?;
+                let var_ident: Ident = input.parse()?;
                 input.parse::<Token![:]>()?;
-                let type_name: Ident = input.parse()?;
+                let type_ident: Ident = input.parse()?;
                 input.parse::<Token![~]>()?;
                 let dependency: Expr = input.parse()?;
                 input.parse::<Token![;]>()?;
                 stmts.push(StmtAst {
-                    var_name,
-                    type_name,
+                    var_ident,
+                    type_ident,
                     dependency,
                 });
             } else if input.peek(Token![use]) {
@@ -67,15 +67,18 @@ impl Parse for ModelAst {
                         queries.push(var_name);
                     }
                     _ => {
-                        return Err(Error::new(keyword.span(), "expected let | observe | query"));
+                        return Err(Error::new(
+                            keyword.span(),
+                            "expected let | use | observe | query",
+                        ));
                     }
                 }
             } else {
-                return Err(input.error("expected let | observe | query"));
+                return Err(input.error("expected let | use | observe | query"));
             }
         }
         Ok(ModelAst {
-            model_name,
+            model_ident,
             use_exprs,
             stmts,
             queries,
@@ -85,7 +88,7 @@ impl Parse for ModelAst {
 }
 
 #[test]
-fn test_parse() {
+fn test_parse_errors() {
     use quote::quote;
     use syn::parse2;
 
@@ -107,35 +110,10 @@ fn test_parse() {
         letu rain : bool ~ Bernoulli::new( 0.2 );
     ))
     .is_err());
-    assert!(parse2::<ModelAst>(quote!(
-        mod grass;
-        use ferric::distributions::Bernoulli;
-
-        let rain : bool ~ Bernoulli::new( 0.2 );
-
-        let sprinkler : bool ~
-            if rain {
-                Bernoulli::new( 0.01 )
-            } else {
-                Bernoulli::new( 0.4 )
-            };
-
-        let grass_wet : bool ~ Bernoulli::new(
-            if sprinkler && rain { 0.99 }
-            else if sprinkler && !rain { 0.9 }
-            else if !sprinkler && rain { 0.8 }
-            else { 0.0 }
-        );
-
-        observe grass_wet;
-        query rain;
-        query sprinkler;
-    ))
-    .is_ok());
 }
 
 #[test]
-fn test_analyze() {
+fn test_parse_output() {
     use quote::quote;
     use syn::{parse2, parse_quote};
 
@@ -166,7 +144,7 @@ fn test_analyze() {
     .unwrap();
 
     let exp_model_name: Ident = parse_quote!(grass);
-    assert_eq!(model_ast.model_name, exp_model_name);
+    assert_eq!(model_ast.model_ident, exp_model_name);
 
     let exp_use_exprs: &Expr = &parse_quote!(ferric::distributions::Bernoulli);
     assert_eq!(model_ast.use_exprs[0], *exp_use_exprs);
@@ -175,8 +153,8 @@ fn test_analyze() {
     let exp_var_name: Ident = parse_quote!(rain);
     let exp_type_name: Ident = parse_quote!(bool);
     let exp_dependency: &Expr = &parse_quote!(Bernoulli::new(0.2));
-    assert_eq!(model_ast.stmts[0].var_name, exp_var_name);
-    assert_eq!(model_ast.stmts[0].type_name, exp_type_name);
+    assert_eq!(model_ast.stmts[0].var_ident, exp_var_name);
+    assert_eq!(model_ast.stmts[0].type_ident, exp_type_name);
     assert_eq!(model_ast.stmts[0].dependency, *exp_dependency);
     assert_eq!(model_ast.stmts.len(), 3);
 
