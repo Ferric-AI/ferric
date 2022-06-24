@@ -15,11 +15,12 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         let use_stmt = quote! {use #use_expr};
         use_stmts.push(use_stmt);
     }
+    // additional use statements needed for code generation
+    use_stmts.push(quote! {use ferric::FeOption});
 
     // for all let <variable name> statements
-    let mut var_idents = Vec::<Ident>::new(); // <variable name>
+    let mut var_idents = Vec::<Ident>::new(); // var_<variable name>
     let mut var_type_idents = Vec::<Ident>::new(); // <variable's type name>
-    let mut var_init_idents = Vec::<Ident>::new(); // initialized_<variable name>
     let mut var_eval_idents = Vec::<Ident>::new(); // eval_<variable name>
     let mut var_eval_dist_idents = Vec::<Ident>::new(); // evaldist_<variable name>
     let mut eval_dist_exprs = Vec::<TokenStream>::new(); // expression for evaldist_<variable name>
@@ -41,8 +42,6 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         let var_ident = format_ident!("var_{}", &variable.var_ident);
         var_idents.push(var_ident.clone());
         var_type_idents.push(variable.type_ident.clone());
-        let init_var = format_ident!("initialized_{}", &variable.var_ident);
-        var_init_idents.push(init_var.clone());
         let eval_var = format_ident!("eval_{}", &variable.var_ident);
         var_eval_idents.push(eval_var.clone());
         let eval_dist_var = format_ident!("evaldist_{}", &variable.var_ident);
@@ -51,7 +50,7 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         let modified_eval_dist_dep = replace(quote! {#eval_dist_dep}, &ir.variables);
         eval_dist_exprs.push(modified_eval_dist_dep);
         // if this variable is being queried then we need to store these
-        // generate tokens in query-specific lists
+        // generated tokens in query-specific lists
         if variable.is_queried {
             query_idents.push(variable.var_ident.clone());
             query_type_idents.push(variable.type_ident.clone());
@@ -72,10 +71,14 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                 #use_stmts;
             )*
 
+            // all the queried variables are fields in the `Sample` struct
             pub struct Sample {
-                #(pub #query_idents: #query_type_idents, )*
+                #(
+                    pub #query_idents: #query_type_idents,
+                )*
             }
 
+            // all the observed variables are fields in the `Model` struct
             pub struct Model {
                 #(
                     pub #obs_idents: #obs_type_idents,
@@ -95,8 +98,7 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
 
             pub struct World<R> {
                 rng: R,
-                #(#var_idents: #var_type_idents, )*
-                #(#var_init_idents: bool, )*
+                #(#var_idents: FeOption<#var_type_idents>, )*
                 #(#obs_obs_idents: #obs_type_idents, )*
             }
 
@@ -112,15 +114,14 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                 pub fn new(rng: R, #(#obs_idents: #obs_type_idents,)*) -> World<R> {
                     World {
                         rng: rng,
-                        #(#var_idents: Default::default(), )*
-                        #(#var_init_idents: false, )*
+                        #(#var_idents: FeOption::Unknown, )*
                         #(#obs_obs_idents: #obs_idents, )*
                     }
                 }
 
                 pub fn reset(&mut self) {
                     #(
-                        self.#var_init_idents = false;
+                        self.#var_idents = FeOption::Unknown;
                     )*
                 }
 
@@ -142,12 +143,12 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
 
                 #(
                 pub fn #var_eval_idents(&mut self) -> #var_type_idents {
-                    if !self.#var_init_idents {
+                    if self.#var_idents.is_unknown() {
                         let dist = self.#var_eval_dist_idents();
-                        self.#var_idents = dist.sample(&mut self.rng);
-                        self.#var_init_idents = true;
+                        self.#var_idents = FeOption::Known(dist.sample(&mut self.rng));
                     }
-                    self.#var_idents
+                    // TODO: handle the case when the value is Null
+                    self.#var_idents.unwrap()
                 }
 
                 pub fn #var_eval_dist_idents(&mut self) -> Box<dyn ferric::distributions::Distribution<R, Domain=#var_type_idents>> {

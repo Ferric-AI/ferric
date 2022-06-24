@@ -4,4 +4,6 @@
 pub use ferric_macros::make_model;
 
 // Public modules
+pub mod core;
 pub mod distributions;
+pub use self::core::FeOption; // re-export FeOption
