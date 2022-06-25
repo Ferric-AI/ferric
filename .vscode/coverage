@@ -2,10 +2,20 @@ cargo clean
 rm lcov.info
 rm -fr coverage
 export CARGO_INCREMENTAL=0
+# removing "-Zpanic_abort_tests -Cpanic=abort" since they don't quite work
 export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off"
-cargo +nightly build --verbose $CARGO_OPTIONS
-cargo +nightly test --all-features --no-fail-fast --verbose $CARGO_OPTIONS
-
-grcov . --binary-path ./target/debug -s . --ignore="/*" --ignore="ferric/examples/*" -t lcov --branch --ignore-not-existing > lcov.info
+export RUSTDOCFLAGS="-Cpanic=abort"
+# the following flag makes cargo build work with nightly mode and we don't need the `+nightly` flag any more
+export RUSTC_BOOTSTRAP=1
+cargo build
+cargo test --all-features --no-fail-fast
+# excluding coverage of all test files and unit test sections in files, also excluding panic! macros
+grcov . --binary-path ./target/debug -s . --ignore="/*" --ignore="ferric/examples/*" --ignore="ferric/tests/*" \
+--excl-br-start "#\[test\]" --excl-start "#\[test\]" \
+--excl-br-line "panic!" --excl-line "panic!" -t lcov --branch --ignore-not-existing > lcov.info
 genhtml -o coverage --branch-coverage --show-details --highlight --ignore-errors source --legend lcov.info
 cargo clean
+unset RUSTFLAGS
+unset RUSTDOCFLAGS
+unset RUSTC_BOOTSTRAP
+unset CARGO_INCREMENTAL

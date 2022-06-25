@@ -73,6 +73,20 @@
       }
     },
     {
+      "label": "documentation",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "doc",
+        "--open",
+        "--no-deps",
+        ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
       "label": "run test",
       "type": "shell",
       "command": "cargo",
