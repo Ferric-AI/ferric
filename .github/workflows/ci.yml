@@ -53,7 +53,7 @@ jobs:
           tar xjf grcov-linux-x86_64.tar.bz2
       - name: Run grcov
         run: >
-          grcov . --binary-path ./target/debug -s . --ignore="/*" --ignore="ferric/examples/*" --ignore="ferric/tests/*"
+          ./grcov . --binary-path ./target/debug -s . --ignore="/*" --ignore="ferric/examples/*" --ignore="ferric/tests/*"
             --excl-br-start "#\[test\]" --excl-start "#\[test\]"
             --excl-br-line "panic!" --excl-line "panic!" -t lcov --branch --ignore-not-existing > lcov.info
       - name: Coveralls upload
