@@ -1,8 +1,9 @@
 [package]
 name = "ferric"
 version = "0.1.2"
-edition = "2021"
+edition = "2024"
 authors = ["Nimar Arora <nimar.arora@gmail.com>"]
+rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 description = "A Probablistic Programming Language with a declarative syntax for random variables."
 readme = "../README.md"

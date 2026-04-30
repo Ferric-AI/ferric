@@ -50,7 +50,7 @@ pub fn analyze(ast: ModelAst) -> Result<ModelIR, Error> {
                 return Err(Error::new(
                     query.span(),
                     format!("undefined query variable `{}`", var_name),
-                ))
+                ));
             }
             Some(variable) => {
                 if variable.is_queried {
@@ -72,7 +72,7 @@ pub fn analyze(ast: ModelAst) -> Result<ModelIR, Error> {
                 return Err(Error::new(
                     obs.span(),
                     format!("undefined observed variable `{}`", var_name),
-                ))
+                ));
             }
             Some(variable) => {
                 if variable.is_observed {
@@ -99,72 +99,82 @@ fn test_analyze_errors() {
     use syn::parse2;
 
     // duplicate definition of variable
-    assert!(analyze(
-        parse2::<ModelAst>(quote!(
-            mod grass;
-            use ferric::distributions::Bernoulli;
-            let rain : bool ~ Bernoulli::new( 0.2 );
-            let rain : bool ~ Bernoulli::new( 0.2 );
-        ))
-        .unwrap()
-    )
-    .is_err());
+    assert!(
+        analyze(
+            parse2::<ModelAst>(quote!(
+                mod grass;
+                use ferric::distributions::Bernoulli;
+                let rain : bool ~ Bernoulli::new( 0.2 );
+                let rain : bool ~ Bernoulli::new( 0.2 );
+            ))
+            .unwrap()
+        )
+        .is_err()
+    );
 
     // undefined query variable
-    assert!(analyze(
-        parse2::<ModelAst>(quote!(
-            mod grass;
-            use ferric::distributions::Bernoulli;
-            let rain : bool ~ Bernoulli::new( 0.2 );
-            query sprinkler;
-        ))
-        .unwrap()
-    )
-    .is_err());
+    assert!(
+        analyze(
+            parse2::<ModelAst>(quote!(
+                mod grass;
+                use ferric::distributions::Bernoulli;
+                let rain : bool ~ Bernoulli::new( 0.2 );
+                query sprinkler;
+            ))
+            .unwrap()
+        )
+        .is_err()
+    );
 
     // duplicate query
-    assert!(analyze(
-        parse2::<ModelAst>(quote!(
-            mod grass;
-            use ferric::distributions::Bernoulli;
-            let rain : bool ~ Bernoulli::new( 0.2 );
-            query rain;
-            query rain;
-        ))
-        .unwrap()
-    )
-    .is_err());
+    assert!(
+        analyze(
+            parse2::<ModelAst>(quote!(
+                mod grass;
+                use ferric::distributions::Bernoulli;
+                let rain : bool ~ Bernoulli::new( 0.2 );
+                query rain;
+                query rain;
+            ))
+            .unwrap()
+        )
+        .is_err()
+    );
 
     // undefined observe
-    assert!(analyze(
-        parse2::<ModelAst>(quote!(
-            mod grass;
-            use ferric::distributions::Bernoulli;
-            let rain : bool ~ Bernoulli::new( 0.2 );
-            observe sprinkler;
-        ))
-        .unwrap()
-    )
-    .is_err());
+    assert!(
+        analyze(
+            parse2::<ModelAst>(quote!(
+                mod grass;
+                use ferric::distributions::Bernoulli;
+                let rain : bool ~ Bernoulli::new( 0.2 );
+                observe sprinkler;
+            ))
+            .unwrap()
+        )
+        .is_err()
+    );
 
     // duplicate observe
-    assert!(analyze(
-        parse2::<ModelAst>(quote!(
-            mod grass;
-            use ferric::distributions::Bernoulli;
-            let rain : bool ~ Bernoulli::new( 0.2 );
-            observe rain;
-            observe rain;
-        ))
-        .unwrap()
-    )
-    .is_err());
+    assert!(
+        analyze(
+            parse2::<ModelAst>(quote!(
+                mod grass;
+                use ferric::distributions::Bernoulli;
+                let rain : bool ~ Bernoulli::new( 0.2 );
+                observe rain;
+                observe rain;
+            ))
+            .unwrap()
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn test_analyze_output() {
     use quote::quote;
-    use syn::{parse2, parse_quote};
+    use syn::{parse_quote, parse2};
 
     let model_ast = parse2::<ModelAst>(quote!(
         mod grass;

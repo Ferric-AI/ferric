@@ -92,30 +92,36 @@ fn test_parse_errors() {
     use quote::quote;
     use syn::parse2;
 
-    assert!(parse2::<ModelAst>(quote!(
-        modu grass;
-    ))
-    .is_err());
-    assert!(parse2::<ModelAst>(quote!(
-        mod grass;
-        use ferric::distributions::Bernoulli;
+    assert!(
+        parse2::<ModelAst>(quote!(
+            modu grass;
+        ))
+        .is_err()
+    );
+    assert!(
+        parse2::<ModelAst>(quote!(
+            mod grass;
+            use ferric::distributions::Bernoulli;
 
-        + foo : bool ~ Bernoulli::new( 0.2 );
-    ))
-    .is_err());
-    assert!(parse2::<ModelAst>(quote!(
-        mod grass;
-        use ferric::distributions::Bernoulli;
+            + foo : bool ~ Bernoulli::new( 0.2 );
+        ))
+        .is_err()
+    );
+    assert!(
+        parse2::<ModelAst>(quote!(
+            mod grass;
+            use ferric::distributions::Bernoulli;
 
-        letu rain : bool ~ Bernoulli::new( 0.2 );
-    ))
-    .is_err());
+            letu rain : bool ~ Bernoulli::new( 0.2 );
+        ))
+        .is_err()
+    );
 }
 
 #[test]
 fn test_parse_output() {
     use quote::quote;
-    use syn::{parse2, parse_quote};
+    use syn::{parse_quote, parse2};
 
     let model_ast = parse2::<ModelAst>(quote!(
         mod grass;

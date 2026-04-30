@@ -1,60 +1,39 @@
-name: Tests
+name: Rust CI & Coverage
+
 on:
-  pull_request:
   push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
 jobs:
-  test-versions:
-    name: Test Ferric on Rust ${{ matrix.rust }}
+  test:
+    name: Build, Test & Coverage
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        rust: [stable, beta]
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          override: true
-          components: rustfmt, clippy
-      - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args:  --all-features
-  code-coverage:
-    name: Generate Ferric Code Coverage on Rust nightly
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
-          components: rustfmt, clippy, llvm-tools-preview
-      - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --no-fail-fast
-        env:
-          CARGO_INCREMENTAL: '0'
-          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off'
-          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off'
-      - name: Download grcov v0.8.10
-        run: |
-          wget https://github.com/mozilla/grcov/releases/download/v0.8.10/grcov-x86_64-unknown-linux-gnu.tar.bz2
-          tar xjf grcov-x86_64-unknown-linux-gnu.tar.bz2
-      - name: Run grcov
-        run: ./grcov . --binary-path ./target/debug -s . --ignore="/*" --ignore="ferric/examples/*" --ignore="ferric/tests/*" --excl-br-start "#\[test\]" --excl-start "#\[test\]" --excl-br-line "panic!" --excl-line "panic!" -t lcov --branch --ignore-not-existing > lcov.info
-      - name: Coveralls upload
-        uses: coverallsapp/github-action@master
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build and Test
+        run: cargo build --verbose && cargo test --verbose
+
+      - name: Generate Coverage Report (LCOV)
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: ./lcov.info
+          file: lcov.info

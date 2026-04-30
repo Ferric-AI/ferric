@@ -3,9 +3,3 @@ error: duplicate observe of variable `grass_wet`
    |
 28 |     observe grass_wet;
    |             ^^^^^^^^^
-
-error[E0433]: failed to resolve: use of undeclared crate or module `grass`
-  --> tests/ui/semantic_err_05.rs:32:18
-   |
-32 |     let _model = grass::Model { grass_wet: true };
-   |                  ^^^^^ use of undeclared crate or module `grass`

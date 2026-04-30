@@ -1,7 +1,7 @@
 // Copyright 2022 The Ferric AI Project Developers
 
-use rand::rngs::ThreadRng;
 use rand::Rng;
+use rand::rngs::ThreadRng;
 
 /// A Distribution<Domain=...> defined over a specific domain can be used to generate
 /// random values over that domain.

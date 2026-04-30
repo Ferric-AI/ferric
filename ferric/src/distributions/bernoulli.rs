@@ -21,7 +21,7 @@ impl Bernoulli {
 impl<R: Rng + ?Sized> Distribution<R> for Bernoulli {
     type Domain = bool;
     fn sample(&self, rng: &mut R) -> bool {
-        let val: f64 = rng.gen();
+        let val: f64 = rng.r#gen();
         val < self.p
     }
 }

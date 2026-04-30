@@ -84,3 +84,57 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
+
+## 🛠 Development & Testing
+
+## 1. Install Rust
+If you haven't installed Rust yet, follow the official installation instructions here:
+[Install Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
+Once installed, ensure your toolchain is up to date:
+
+```bash
+rustup update stable
+```
+
+## 2. Install Coverage Tools
+We use `cargo-llvm-cov` for accurate, source-based code coverage. You will need to install the tool and the required LLVM components:
+
+```bash
+# Install the LLVM tools component
+rustup component add llvm-tools-preview
+
+# Install cargo-llvm-cov
+cargo install cargo-llvm-cov --locked
+```
+
+## 3. Running Tests
+To run the standard test suite:
+
+```bash
+cargo test
+```
+
+## 4. Generating Coverage Reports
+You can generate coverage data in multiple formats to match our CI environment or for local inspection:
+
+* View in Browser (HTML):
+
+```bash
+cargo llvm-cov --html --open
+```
+
+* Generate LCOV (for Coveralls/IDEs):
+
+```bash
+cargo llvm-cov --lcov --output-path lcov.info
+```
+
+* Console Summary:
+
+```bash
+cargo llvm-cov
+```
+
+## 5. IDE Integration (Optional)
+If you use VS Code, install the Coverage Gutters extension. After generating an `lcov.info` file, click the Watch button in the bottom status bar to see line-by-line coverage (green/red highlights) directly in your editor.
+

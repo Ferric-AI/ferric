@@ -194,7 +194,7 @@ fn replace(dep_tokens: TokenStream, variables: &HashMap<String, VariableIR>) -> 
 #[test]
 fn output_is_module_item() {
     use proc_macro2::Span;
-    use syn::{parse2, parse_quote, ItemMod};
+    use syn::{ItemMod, parse_quote, parse2};
     let ir = ModelIR {
         model_ident: Ident::new(&String::from("grass"), Span::call_site()),
         use_exprs: vec![parse_quote!(ferric::distributions::Bernoulli)],

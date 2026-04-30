@@ -1,8 +1,9 @@
 [package]
 name = "ferric-macros"
 version = "0.1.2"
-edition = "2021"
+edition = "2024"
 authors = ["Nimar Arora <nimar.arora@gmail.com>"]
+rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 description = "A Probablistic Programming Language with a declarative syntax for random variables."
 readme = "../README.md"
@@ -18,7 +19,7 @@ proc-macro = true
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = {features = ["full"], version="1.0"}
-rand = "0.8.0"
+rand = "0.8"
 
 [dev-dependencies]
 syn = {features = ["full", "extra-traits"], version="1.0"}
