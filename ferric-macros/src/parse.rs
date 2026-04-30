@@ -34,7 +34,8 @@ impl Parse for ModelAst {
         while !input.is_empty() {
             // let var_name ~ dep_expr;
             if input.peek(Token![let]) {
-                input.parse::<Token![let]>()?;
+                // peek confirmed the token; this parse cannot fail.
+                input.parse::<Token![let]>().expect("peek confirmed");
                 let var_ident: Ident = input.parse()?;
                 input.parse::<Token![:]>()?;
                 let type_ident: Ident = input.parse()?;
@@ -47,12 +48,14 @@ impl Parse for ModelAst {
                     dependency,
                 });
             } else if input.peek(Token![use]) {
-                input.parse::<Token![use]>()?;
+                // peek confirmed the token; this parse cannot fail.
+                input.parse::<Token![use]>().expect("peek confirmed");
                 let use_expr: Expr = input.parse()?;
                 input.parse::<Token![;]>()?;
                 use_exprs.push(use_expr);
             } else if input.peek(Ident) {
-                let keyword: Ident = input.parse()?;
+                // peek confirmed an Ident; this parse cannot fail.
+                let keyword: Ident = input.parse().expect("peek confirmed");
                 match keyword.to_string().as_ref() {
                     "observe" => {
                         // observe var_name;
@@ -116,6 +119,54 @@ fn test_parse_errors() {
         ))
         .is_err()
     );
+}
+
+/// Drives parse failures through every `?` early-return in `Parse for ModelAst`,
+/// so the failure half of each region is recorded by llvm-cov.
+#[test]
+fn test_parse_errors_per_token() {
+    use quote::quote;
+    use syn::parse2;
+
+    // --- mod header ---
+    // `mod` keyword missing.
+    assert!(parse2::<ModelAst>(quote!(grass;)).is_err());
+    // `mod` followed by no model_ident (next token is `;`, not Ident).
+    assert!(parse2::<ModelAst>(quote!(mod ;)).is_err());
+    // `mod grass` with no trailing `;`.
+    assert!(parse2::<ModelAst>(quote!(mod grass)).is_err());
+
+    // --- let statement ---
+    // `let` with no var_ident.
+    assert!(parse2::<ModelAst>(quote!(mod m; let ;)).is_err());
+    // `let x` with no `:`.
+    assert!(parse2::<ModelAst>(quote!(mod m; let x ;)).is_err());
+    // `let x :` with no type_ident.
+    assert!(parse2::<ModelAst>(quote!(mod m; let x : ;)).is_err());
+    // `let x : bool` with no `~`.
+    assert!(parse2::<ModelAst>(quote!(mod m; let x : bool ;)).is_err());
+    // `let x : bool ~` with no dependency expr.
+    assert!(parse2::<ModelAst>(quote!(mod m; let x : bool ~ ;)).is_err());
+    // `let x : bool ~ expr` with no trailing `;`.
+    assert!(parse2::<ModelAst>(quote!(mod m; let x : bool ~ Foo)).is_err());
+
+    // --- use statement ---
+    // `use` with no expression.
+    assert!(parse2::<ModelAst>(quote!(mod m; use ;)).is_err());
+    // `use foo` with no trailing `;`.
+    assert!(parse2::<ModelAst>(quote!(mod m; use foo)).is_err());
+
+    // --- observe statement ---
+    // `observe` with no var_name.
+    assert!(parse2::<ModelAst>(quote!(mod m; observe ;)).is_err());
+    // `observe foo` with no trailing `;`.
+    assert!(parse2::<ModelAst>(quote!(mod m; observe foo)).is_err());
+
+    // --- query statement ---
+    // `query` with no var_name.
+    assert!(parse2::<ModelAst>(quote!(mod m; query ;)).is_err());
+    // `query foo` with no trailing `;`.
+    assert!(parse2::<ModelAst>(quote!(mod m; query foo)).is_err());
 }
 
 #[test]

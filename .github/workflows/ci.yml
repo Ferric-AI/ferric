@@ -29,8 +29,13 @@ jobs:
       - name: Build and Test
         run: cargo build --verbose && cargo test --verbose
 
+      - name: Install nightly toolchain for coverage
+        run: |
+          rustup toolchain install nightly
+          rustup component add llvm-tools-preview --toolchain nightly
+
       - name: Generate Coverage Report (LCOV)
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        run: cargo +nightly llvm-cov --all-features --workspace --doctests --lcov --output-path lcov.info
 
       - name: Upload to Coveralls
         uses: coverallsapp/github-action@v2

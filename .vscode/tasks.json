@@ -68,7 +68,10 @@
       "type": "shell",
       "command": "cargo",
       "args": [
+        "+nightly",
         "llvm-cov",
+        "--workspace",
+        "--doctests",
         "--lcov",
         "--output-path",
         "lcov.info"

@@ -120,19 +120,19 @@ You can generate coverage data in multiple formats to match our CI environment o
 * View in Browser (HTML):
 
 ```bash
-cargo llvm-cov --html --open
+cargo +nightly llvm-cov --workspace --doctests --html --open
 ```
 
 * Generate LCOV (for Coveralls/IDEs):
 
 ```bash
-cargo llvm-cov --lcov --output-path lcov.info
+cargo +nightly llvm-cov --workspace --doctests --lcov --output-path lcov.info
 ```
 
 * Console Summary:
 
 ```bash
-cargo llvm-cov
+cargo +nightly llvm-cov --workspace --doctests
 ```
 
 ## 5. IDE Integration (Optional)
