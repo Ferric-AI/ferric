@@ -1,20 +1,30 @@
 // Copyright 2022 The Ferric AI Project Developers
 
-//! A probabilistic programming language with a declarative syntax for
+//! A probabilistic programming language in Rust with a declarative syntax for
 //! Bayesian models.
 //!
-//! Models are written inside the [`make_model!`] macro using a simple
-//! `let variable : Type ~ Distribution;` syntax. The macro generates
-//! a Rust module containing typed `Sample` and `WeightedSample` structs
-//! and two iterator-based sampling strategies:
+//! # Key entry points
 //!
-//! | Method | Algorithm | When to use |
-//! |--------|-----------|-------------|
-//! | [`Model::sample_iter`](crate) | Rejection sampling | Discrete observations only |
-//! | [`Model::weighted_sample_iter`](crate) | Self-normalised importance sampling (SNIS) | Any model, including continuous observations |
+//! - [`make_model!`] — declare a probabilistic model; expands into a module
+//!   with `Model`, `Sample`, `WeightedSample`, and two iterator types.
+//! - [`weighted_mean`] / [`weighted_std`] — posterior summaries from
+//!   self-normalised importance-sampling (SNIS) weights.
+//! - [`distributions`] — built-in probability distributions:
+//!   [`Bernoulli`](distributions::Bernoulli),
+//!   [`Binomial`](distributions::Binomial),
+//!   [`Geometric`](distributions::Geometric),
+//!   [`Poisson`](distributions::Poisson),
+//!   [`Uniform`](distributions::Uniform),
+//!   [`Exponential`](distributions::Exponential),
+//!   [`Normal`](distributions::Normal),
+//!   [`LogNormal`](distributions::LogNormal),
+//!   [`Beta`](distributions::Beta),
+//!   [`Gamma`](distributions::Gamma),
+//!   [`StudentT`](distributions::StudentT),
+//!   [`Cauchy`](distributions::Cauchy).
 //!
-//! After collecting weighted samples, use [`weighted_mean`] and
-//! [`weighted_std`] to compute posterior summaries.
+//! See the [README](https://github.com/ferric-ai/ferric#readme) for a
+//! quick-start guide and worked examples.
 
 // re-export make_model from the ferric-macros crate
 pub use ferric_macros::make_model;
