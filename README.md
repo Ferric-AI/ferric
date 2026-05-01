@@ -182,3 +182,50 @@ cargo expand --example grass --package ferric > expanded_grass.rs
 
 Note: `cargo expand` is a separate tool (provided by the `cargo-expand` crate) and is not included in the default Cargo installation.
 
+## Publishing to crates.io
+
+Follow these steps to publish the current crate (version 0.1.3) to crates.io.
+
+- Verify tests and build:
+
+```bash
+cargo test --workspace
+cargo build --release
+```
+
+- Sanity-check packaging and do a dry-run:
+
+```bash
+# Create a local package (checks manifest, files included)
+cargo package --manifest-path ferric/Cargo.toml
+
+# Do a publish dry-run to verify crates.io acceptance
+cargo publish --manifest-path ferric/Cargo.toml --dry-run
+```
+
+- Ensure authentication (one of these):
+
+```bash
+# Log in interactively with your crates.io API token
+cargo login <CRATES_IO_TOKEN>
+
+# Or export the token for CI or a single-session publish
+export CARGO_REGISTRY_TOKEN=<CRATES_IO_TOKEN>
+```
+
+- Publish the crate (if dry-run succeeded):
+
+```bash
+cargo publish --manifest-path ferric/Cargo.toml
+```
+
+- Tag the release in git and push:
+
+```bash
+git tag -a v0.1.3 -m "Release v0.1.3"
+git push origin HEAD
+git push origin --tags
+```
+
+After publishing, consider updating your changelog, docs, and announcing the release.
+
