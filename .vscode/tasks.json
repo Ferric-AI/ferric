@@ -82,6 +82,21 @@
       }
     },
     {
+      "label": "coverage summary",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "+nightly",
+        "llvm-cov",
+        "--workspace",
+        "--doctests",
+        ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
       "label": "documentation",
       "type": "shell",
       "command": "cargo",

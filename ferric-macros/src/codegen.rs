@@ -32,10 +32,10 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
 
     // for all observe <variable name> statements
     let mut obs_idents = Vec::<Ident>::new(); // <variable name>
-    let mut obs_var_idents = Vec::<Ident>::new(); // var_<variable name>
     let mut obs_type_idents = Vec::<Ident>::new(); // <variable's type name>
     let mut obs_obs_idents = Vec::<Ident>::new(); // obs_<variable name>
-    let mut obs_eval_idents = Vec::<Ident>::new(); // eval_<variable name>
+    let mut obs_eval_idents = Vec::<Ident>::new(); // eval_<variable name>  (rejection sampling)
+    let mut obs_eval_dist_idents = Vec::<Ident>::new(); // evaldist_<variable name>  (importance sampling)
 
     // process all the variables in the model
     for variable in ir.variables.values() {
@@ -59,9 +59,9 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         if variable.is_observed {
             obs_idents.push(variable.var_ident.clone());
             obs_type_idents.push(variable.type_ident.clone());
-            obs_var_idents.push(var_ident.clone());
             obs_obs_idents.push(format_ident!("obs_{}", &variable.var_ident));
             obs_eval_idents.push(eval_var.clone());
+            obs_eval_dist_idents.push(eval_dist_var.clone());
         }
     }
 
@@ -71,14 +71,42 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                 #use_stmts;
             )*
 
-            // all the queried variables are fields in the `Sample` struct
+            /// A sample returned by rejection sampling via [`Model::sample_iter`].
+            ///
+            /// Every observed variable matched its observed value exactly, so
+            /// all queried fields are drawn from the exact posterior.
             pub struct Sample {
                 #(
                     pub #query_idents: #query_type_idents,
                 )*
             }
 
-            // all the observed variables are fields in the `Model` struct
+            /// A sample returned by self-normalised importance sampling via
+            /// [`Model::weighted_sample_iter`].
+            ///
+            /// The queried variables live in the nested `sample` field so
+            /// that `log_weight` can never collide with a user-defined
+            /// random variable name.  Use [`ferric::weighted_mean`] and
+            /// [`ferric::weighted_std`] to compute posterior statistics.
+            ///
+            /// # Example access pattern
+            ///
+            /// ```text
+            /// for ws in model.weighted_sample_iter().take(n) {
+            ///     vals.push(ws.sample.my_var as u8 as f64);
+            ///     log_weights.push(ws.log_weight);
+            /// }
+            /// ```
+            pub struct WeightedSample {
+                /// Sum of log-likelihoods of all observations under the
+                /// latent variables drawn in this sample.  Produced by
+                /// $\sum_i \log p(\text{obs}_i \mid \text{latents})$.
+                pub log_weight: f64,
+                /// The queried variable values for this sample.
+                pub sample: Sample,
+            }
+
+            /// The observed data for the model.
             pub struct Model {
                 #(
                     pub #obs_idents: #obs_type_idents,
@@ -86,6 +114,20 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
             }
 
             impl Model {
+                /// Returns an iterator of exact posterior samples via
+                /// rejection sampling.
+                ///
+                /// Each call to [`Iterator::next`] loops internally until a
+                /// prior sample is consistent with every observation, then
+                /// returns that sample.
+                ///
+                /// # When to use
+                ///
+                /// Only valid when **all** observed variables are discrete.
+                /// Conditioning on a continuous observed value has probability
+                /// zero and this iterator will loop forever.  Use
+                /// [`Model::weighted_sample_iter`] for models with continuous
+                /// observations.
                 pub fn sample_iter(&self) -> World<rand::rngs::ThreadRng> {
                     World::new(
                         rand::thread_rng(),
@@ -93,6 +135,49 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                             self.#obs_idents,
                         )*
                     )
+                }
+
+                /// Returns an iterator of importance-weighted samples using
+                /// self-normalised importance sampling (SNIS).
+                ///
+                /// Each call to [`Iterator::next`] draws the latent variables
+                /// from their priors and sets
+                ///
+                /// ```text
+                /// log_weight = Σ log p(obs_i | latent variables)
+                /// ```
+                ///
+                /// Collect the `log_weight` values alongside the queried
+                /// fields and pass them to [`ferric::weighted_mean`] or
+                /// [`ferric::weighted_std`] to obtain posterior estimates.
+                ///
+                /// # When to use
+                ///
+                /// Valid for **all** models, including those with continuous
+                /// observed variables.  Also correct (though less sample-
+                /// efficient than rejection sampling) for purely discrete
+                /// models.
+                pub fn weighted_sample_iter(&self) -> WeightedWorld<rand::rngs::ThreadRng> {
+                    WeightedWorld(World::new(
+                        rand::thread_rng(),
+                        #(
+                            self.#obs_idents,
+                        )*
+                    ))
+                }
+            }
+
+            /// Iterator adaptor over [`World`] that yields [`WeightedSample`]s
+            /// from self-normalised importance sampling.
+            ///
+            /// Obtain one via [`Model::weighted_sample_iter`].
+            pub struct WeightedWorld<R>(World<R>);
+
+            impl<R: rand::Rng> Iterator for WeightedWorld<R> {
+                type Item = WeightedSample;
+
+                fn next(&mut self) -> Option<Self::Item> {
+                    Some(self.0.weighted_sample())
                 }
             }
 
@@ -125,6 +210,11 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                     )*
                 }
 
+                /// Draw one exact posterior sample via rejection sampling.
+                ///
+                /// Loops until a prior draw matches every observed value, then
+                /// returns the queried variable values.  Only valid for
+                /// discrete observations.
                 pub fn sample(&mut self) -> Sample {
                     loop {
                         self.reset();
@@ -138,6 +228,36 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                                 #query_idents: self.#query_eval_var_idents(),
                             )*
                         };
+                    }
+                }
+
+                /// Draw one importance-weighted sample via self-normalised
+                /// importance sampling.
+                ///
+                /// Latent variables are sampled from their priors; the
+                /// `log_weight` field is set to
+                ///
+                /// ```text
+                /// log_weight = Σ log p(obs_i | latent variables)
+                /// ```
+                ///
+                /// Valid for discrete and continuous observations alike.
+                pub fn weighted_sample(&mut self) -> WeightedSample {
+                    self.reset();
+                    let mut log_weight = 0.0f64;
+                    #(
+                        {
+                            let dist = self.#obs_eval_dist_idents();
+                            log_weight += dist.log_prob(&self.#obs_obs_idents);
+                        }
+                    )*
+                    WeightedSample {
+                        log_weight,
+                        sample: Sample {
+                            #(
+                                #query_idents: self.#query_eval_var_idents(),
+                            )*
+                        },
                     }
                 }
 

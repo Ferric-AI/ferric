@@ -29,10 +29,12 @@ make_model! {
 
 fn main() {
     let model = grass::Model { grass_wet: true };
-    let mut num_rain = 0;
-    let mut num_sprinkler = 0;
     let num_samples = 100000;
+
+    // --- Rejection sampling (original method) ---
     let start = Instant::now();
+    let mut num_rain = 0usize;
+    let mut num_sprinkler = 0usize;
     for sample in model.sample_iter().take(num_samples) {
         if sample.rain {
             num_rain += 1;
@@ -41,12 +43,30 @@ fn main() {
             num_sprinkler += 1;
         }
     }
-    let num_samples = num_samples as f64;
+    let reject_elapsed = start.elapsed().as_millis();
+    let post_rain_reject = num_rain as f64 / num_samples as f64;
+    let post_sprinkler_reject = num_sprinkler as f64 / num_samples as f64;
+
+    // --- Likelihood-weighted sampling (new method) ---
+    let start = Instant::now();
+    let mut rain_vals = Vec::with_capacity(num_samples);
+    let mut sprinkler_vals = Vec::with_capacity(num_samples);
+    let mut log_weights = Vec::with_capacity(num_samples);
+    for ws in model.weighted_sample_iter().take(num_samples) {
+        rain_vals.push(ws.sample.rain as u8 as f64);
+        sprinkler_vals.push(ws.sample.sprinkler as u8 as f64);
+        log_weights.push(ws.log_weight);
+    }
+    let weighted_elapsed = start.elapsed().as_millis();
+    let post_rain_weighted = ferric::weighted_mean(&rain_vals, &log_weights);
+    let post_sprinkler_weighted = ferric::weighted_mean(&sprinkler_vals, &log_weights);
+
     println!(
-        "posterior: rain = {} sprinkler = {}. Elapsed {} millisec for {} samples",
-        (num_rain as f64) / num_samples,
-        (num_sprinkler as f64) / num_samples,
-        start.elapsed().as_millis(),
-        num_samples,
+        "rejection   : rain = {:.4} sprinkler = {:.4}  ({} ms, {} samples)",
+        post_rain_reject, post_sprinkler_reject, reject_elapsed, num_samples
+    );
+    println!(
+        "lik-weighted: rain = {:.4} sprinkler = {:.4}  ({} ms, {} samples)",
+        post_rain_weighted, post_sprinkler_weighted, weighted_elapsed, num_samples
     );
 }

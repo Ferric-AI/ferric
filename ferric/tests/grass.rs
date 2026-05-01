@@ -35,12 +35,37 @@ fn grass() {
     let num_samples = 100000;
     let ans = 0.3577f64;
     let err = 5.0 * (ans * (1.0 - ans) / (num_samples as f64)).sqrt(); // 5 sigma error
-    let post_rain = (model
+
+    // --- Rejection sampling (original method) ---
+    let post_rain_reject = (model
         .sample_iter()
         .take(num_samples)
-        .map(|x| x.rain as isize)
+        .map(|s| s.rain as isize)
         .sum::<isize>() as f64)
         / (num_samples as f64);
-    println!("post_rain is {}", post_rain);
-    assert!(post_rain > (ans - err) && post_rain < (ans + err));
+    println!("rejection    post_rain = {}", post_rain_reject);
+    assert!(
+        post_rain_reject > (ans - err) && post_rain_reject < (ans + err),
+        "rejection post_rain {} outside [{}, {}]",
+        post_rain_reject,
+        ans - err,
+        ans + err
+    );
+
+    // --- Likelihood-weighted sampling (new method) ---
+    let mut rain_vals = Vec::with_capacity(num_samples);
+    let mut log_weights = Vec::with_capacity(num_samples);
+    for ws in model.weighted_sample_iter().take(num_samples) {
+        rain_vals.push(ws.sample.rain as u8 as f64);
+        log_weights.push(ws.log_weight);
+    }
+    let post_rain_weighted = ferric::weighted_mean(&rain_vals, &log_weights);
+    println!("lik-weighted post_rain = {}", post_rain_weighted);
+    assert!(
+        post_rain_weighted > (ans - err) && post_rain_weighted < (ans + err),
+        "weighted post_rain {} outside [{}, {}]",
+        post_rain_weighted,
+        ans - err,
+        ans + err
+    );
 }

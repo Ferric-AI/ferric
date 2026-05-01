@@ -72,6 +72,26 @@ fn main() {
 
 ## License
 
+## How it works
+
+Ferric's `make_model!` macro declares a probabilistic model and the
+relationships between random variables. Within the macro you:
+
+- Define random variables and their generative distributions.
+- Mark variables with `observe` to indicate data the model will be
+    conditioned on.
+- Mark variables with `query` to indicate values you want returned in
+    posterior samples.
+
+After expansion, the macro produces a module containing a `Model` type.
+You construct the model by supplying values for the observed fields
+(for example `let model = grass::Model { grass_wet: true };`). Use the
+model's sampling API (for example `model.sample_iter()`) to draw
+samples from the posterior; each sample contains the queried variables
+as fields that you can inspect to estimate posterior probabilities.
+
+Refer to the `Example` above for a canonical, end-to-end usage sample.
+
 Licensed under either of
 
  * [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
@@ -137,4 +157,28 @@ cargo +nightly llvm-cov --workspace --doctests
 
 ## 5. IDE Integration (Optional)
 If you use VS Code, install the Coverage Gutters extension. After generating an `lcov.info` file, click the Watch button in the bottom status bar to see line-by-line coverage (green/red highlights) directly in your editor.
+
+## Developer
+
+If you're working on the Ferric codebase itself and need to expand the `make_model!` macro for debugging or inspection, install the following developer tools:
+
+```bash
+# Install the rust source component (required by some expansion tools)
+rustup component add rust-src
+
+# Install cargo-expand to make `cargo expand` available
+cargo install --locked cargo-expand
+```
+
+Then you can expand the `grass` example (or any example) with:
+
+```bash
+# Expand the `grass` example and print expanded Rust to stdout
+cargo expand --example grass --package ferric
+
+# Or save the expanded output to a file for easier reading
+cargo expand --example grass --package ferric > expanded_grass.rs
+```
+
+Note: `cargo expand` is a separate tool (provided by the `cargo-expand` crate) and is not included in the default Cargo installation.
 
