@@ -184,42 +184,53 @@ Note: `cargo expand` is a separate tool (provided by the `cargo-expand` crate) a
 
 ## Publishing to crates.io
 
-Follow these steps to publish the current crate (version 0.1.3) to crates.io.
+Follow this updated sequence to publish the crate and any internal dependencies (recommended):
 
-- Verify tests and build:
+- 1) Run tests & build locally:
 
 ```bash
 cargo test --workspace
 cargo build --release
 ```
 
-- Sanity-check packaging and do a dry-run:
+- 2) Ensure versions are synced and `path` deps include `version`:
 
-```bash
-# Create a local package (checks manifest, files included)
-cargo package --manifest-path ferric/Cargo.toml
+    - In `ferric-macros/Cargo.toml` set the release version (e.g. `0.1.3`).
+    - In `ferric/Cargo.toml` reference the local path and published version:
 
-# Do a publish dry-run to verify crates.io acceptance
-cargo publish --manifest-path ferric/Cargo.toml --dry-run
+```toml
+ferric-macros = { path = "../ferric-macros", version = "0.1.3" }
 ```
 
-- Ensure authentication (one of these):
+- 3) Obtain crates.io authentication (one-time or CI):
 
 ```bash
-# Log in interactively with your crates.io API token
 cargo login <CRATES_IO_TOKEN>
-
-# Or export the token for CI or a single-session publish
+# or (for CI/session)
 export CARGO_REGISTRY_TOKEN=<CRATES_IO_TOKEN>
 ```
 
-- Publish the crate (if dry-run succeeded):
+- 4) Publish internal/proc-macro crates first (if any). For `ferric-macros`:
 
 ```bash
+cargo package --manifest-path ferric-macros/Cargo.toml
+cargo publish --manifest-path ferric-macros/Cargo.toml --dry-run
+cargo publish --manifest-path ferric-macros/Cargo.toml
+```
+
+    - Wait a short time (30–60s) after publishing for the crates.io index to update.
+
+- 5) Package & dry-run the main crate, then publish:
+
+```bash
+cargo package --manifest-path ferric/Cargo.toml
+cargo publish --manifest-path ferric/Cargo.toml --dry-run
 cargo publish --manifest-path ferric/Cargo.toml
 ```
 
-- Tag the release in git and push:
+    - If `cargo package` fails with a dependency version error, it means a required dependency version is not yet available on crates.io — publish that dependency first.
+
+- 6) Tag and push git commits:
 
 ```bash
 git tag -a v0.1.3 -m "Release v0.1.3"
@@ -227,5 +238,16 @@ git push origin HEAD
 git push origin --tags
 ```
 
-After publishing, consider updating your changelog, docs, and announcing the release.
+- 7) Post-release housekeeping:
+
+    - Move `Unreleased` changes into the released section of `CHANGELOG.md` and add a new `Unreleased` heading.
+    - Bump the next development version if you follow a `X.Y.Z-dev` workflow.
+    - Publish docs or update the website and announce the release.
+
+Notes and tips:
+
+- Always publish internal dependencies (proc macros, helper crates) before crates that depend on them.
+- Keep `path` dependencies during development but include a `version` so `cargo package` validates.
+- If the main crate cannot find the new dependency version immediately after publishing, wait a short time and retry.
+- Verify `readme`, `license`, and `repository` fields in each `Cargo.toml` to ensure crates.io displays metadata correctly.
 
