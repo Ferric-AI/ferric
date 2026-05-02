@@ -9,6 +9,8 @@ pub struct VariableIR {
     pub var_ident: Ident,
     pub type_ident: Type,
     pub dependency: Expr,
+    /// `true` if defined with `~` (distribution), `false` if defined with `=` (deterministic expr).
+    pub is_stochastic: bool,
     pub is_queried: bool,
     pub is_observed: bool,
 }
@@ -37,6 +39,7 @@ pub fn analyze(ast: ModelAst) -> Result<ModelIR, Error> {
             var_ident: stmt.var_ident,
             dependency: stmt.dependency,
             type_ident: stmt.type_ident,
+            is_stochastic: stmt.is_stochastic,
             is_queried: false,
             is_observed: false,
         };
@@ -218,6 +221,40 @@ fn test_analyze_output() {
     assert_eq!(var.var_ident, exp_var_name);
     assert_eq!(var.type_ident, exp_type_name);
     assert_eq!(var.dependency, *exp_dependency);
+    assert!(var.is_stochastic);
     assert!(var.is_queried);
     assert!(!var.is_observed);
+}
+
+#[test]
+fn test_analyze_deterministic_var() {
+    use quote::quote;
+    use syn::{parse_quote, parse2};
+
+    let model_ast = parse2::<ModelAst>(quote!(
+        mod det;
+        use ferric::distributions::Bernoulli;
+
+        let x : bool ~ Bernoulli::new(0.5);
+        let two_x : u8 = 2u8 * x as u8;
+
+        observe two_x;
+        query x;
+    ))
+    .unwrap();
+
+    let model_ir = analyze(model_ast).unwrap();
+
+    let x_var = model_ir.variables.get(&String::from("x")).unwrap();
+    assert!(x_var.is_stochastic);
+    assert!(!x_var.is_observed);
+    assert!(x_var.is_queried);
+
+    let two_x_var = model_ir.variables.get(&String::from("two_x")).unwrap();
+    assert!(!two_x_var.is_stochastic);
+    assert!(two_x_var.is_observed);
+    assert!(!two_x_var.is_queried);
+
+    let exp_dep: syn::Expr = parse_quote!(2u8 * x as u8);
+    assert_eq!(two_x_var.dependency, exp_dep);
 }

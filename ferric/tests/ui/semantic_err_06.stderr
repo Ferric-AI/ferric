@@ -1,0 +1,19 @@
+error[E0599]: no method named `weighted_sample_iter` found for struct `Model` in the current scope
+  --> tests/ui/semantic_err_06.rs:21:19
+   |
+ 8 | / make_model! {
+ 9 | |     mod det_weighted_obs;
+10 | |     use ferric::distributions::Bernoulli;
+...  |
+16 | |     query x;
+17 | | }
+   | |_- method `weighted_sample_iter` not found for this struct
+...
+21 |       let _ = model.weighted_sample_iter();
+   |                     ^^^^^^^^^^^^^^^^^^^^
+   |
+help: there is a method `sample_iter` with a similar name
+   |
+21 -     let _ = model.weighted_sample_iter();
+21 +     let _ = model.sample_iter();
+   |

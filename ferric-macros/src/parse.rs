@@ -7,6 +7,8 @@ pub struct StmtAst {
     pub var_ident: Ident,
     pub type_ident: Type,
     pub dependency: Expr,
+    /// `true` if defined with `~` (distribution), `false` if defined with `=` (deterministic expr).
+    pub is_stochastic: bool,
 }
 
 /// ModelAst is the Abstract Syntax Tree representation of the model.
@@ -39,13 +41,22 @@ impl Parse for ModelAst {
                 let var_ident: Ident = input.parse()?;
                 input.parse::<Token![:]>()?;
                 let type_ident: Type = input.parse()?;
-                input.parse::<Token![~]>()?;
+                let is_stochastic = if input.peek(Token![~]) {
+                    input.parse::<Token![~]>().expect("peek confirmed");
+                    true
+                } else if input.peek(Token![=]) {
+                    input.parse::<Token![=]>().expect("peek confirmed");
+                    false
+                } else {
+                    return Err(input.error("expected `~` or `=`"));
+                };
                 let dependency: Expr = input.parse()?;
                 input.parse::<Token![;]>()?;
                 stmts.push(StmtAst {
                     var_ident,
                     type_ident,
                     dependency,
+                    is_stochastic,
                 });
             } else if input.peek(Token![use]) {
                 // peek confirmed the token; this parse cannot fail.
@@ -143,12 +154,14 @@ fn test_parse_errors_per_token() {
     assert!(parse2::<ModelAst>(quote!(mod m; let x ;)).is_err());
     // `let x :` with no type.
     assert!(parse2::<ModelAst>(quote!(mod m; let x : ;)).is_err());
-    // `let x : bool` with no `~`.
+    // `let x : bool` with neither `~` nor `=`.
     assert!(parse2::<ModelAst>(quote!(mod m; let x : bool ;)).is_err());
     // `let x : bool ~` with no dependency expr.
     assert!(parse2::<ModelAst>(quote!(mod m; let x : bool ~ ;)).is_err());
     // `let x : bool ~ expr` with no trailing `;`.
     assert!(parse2::<ModelAst>(quote!(mod m; let x : bool ~ Foo)).is_err());
+    // `let x : bool = expr` with no trailing `;`.
+    assert!(parse2::<ModelAst>(quote!(mod m; let x : bool = true)).is_err());
 
     // --- use statement ---
     // `use` with no expression.
@@ -221,6 +234,34 @@ fn test_parse_output() {
 
     let exp_observes_0: Ident = parse_quote!(grass_wet);
     assert_eq!(model_ast.observes, [exp_observes_0]);
+
+    assert!(model_ast.stmts[0].is_stochastic);
+    assert!(model_ast.stmts[1].is_stochastic);
+    assert!(model_ast.stmts[2].is_stochastic);
+}
+
+#[test]
+fn test_parse_deterministic_stmt() {
+    use quote::quote;
+    use syn::{parse_quote, parse2};
+
+    let model_ast = parse2::<ModelAst>(quote!(
+        mod det;
+        use ferric::distributions::Bernoulli;
+
+        let x : bool ~ Bernoulli::new(0.5);
+        let two_x : u8 = 2u8 * x as u8;
+
+        observe two_x;
+        query x;
+    ))
+    .unwrap();
+
+    assert!(model_ast.stmts[0].is_stochastic);
+    assert!(!model_ast.stmts[1].is_stochastic);
+
+    let exp_dep: syn::Expr = parse_quote!(2u8 * x as u8);
+    assert_eq!(model_ast.stmts[1].dependency, exp_dep);
 }
 
 #[test]
