@@ -34,8 +34,12 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
     let mut obs_idents = Vec::<Ident>::new(); // <variable name>
     let mut obs_type_idents = Vec::<Type>::new(); // <variable's type>
     let mut obs_obs_idents = Vec::<Ident>::new(); // obs_<variable name>
+    let mut obs_var_idents = Vec::<Ident>::new(); // var_<variable name>  (for reset)
     let mut obs_eval_idents = Vec::<Ident>::new(); // eval_<variable name>  (rejection sampling)
     let mut obs_eval_dist_idents = Vec::<Ident>::new(); // evaldist_<variable name>  (importance sampling)
+
+    // var_<name> idents for non-observed variables only (reset sets these to Unknown)
+    let mut non_obs_var_idents = Vec::<Ident>::new();
 
     // process all the variables in the model
     for variable in ir.variables.values() {
@@ -60,8 +64,11 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
             obs_idents.push(variable.var_ident.clone());
             obs_type_idents.push(variable.type_ident.clone());
             obs_obs_idents.push(format_ident!("obs_{}", &variable.var_ident));
+            obs_var_idents.push(var_ident.clone());
             obs_eval_idents.push(eval_var.clone());
             obs_eval_dist_idents.push(eval_dist_var.clone());
+        } else {
+            non_obs_var_idents.push(var_ident.clone());
         }
     }
 
@@ -210,6 +217,21 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                     )*
                 }
 
+                /// Like `reset`, but pins every observed variable to its known
+                /// observed value instead of resetting it to Unknown.
+                ///
+                /// Used by importance sampling: latent variables are drawn from
+                /// the prior, while observed variables must not be re-sampled
+                /// when queried variables evaluate their distributions.
+                fn reset_for_weighted(&mut self) {
+                    #(
+                        self.#non_obs_var_idents = FeOption::Unknown;
+                    )*
+                    #(
+                        self.#obs_var_idents = FeOption::Known(self.#obs_obs_idents.clone());
+                    )*
+                }
+
                 /// Draw one exact posterior sample via rejection sampling.
                 ///
                 /// Loops until a prior draw matches every observed value, then
@@ -246,7 +268,7 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                 ///
                 /// Valid for discrete and continuous observations alike.
                 pub fn weighted_sample(&mut self) -> WeightedSample {
-                    self.reset();
+                    self.reset_for_weighted();
                     let mut log_weight = 0.0f64;
                     #(
                         {
