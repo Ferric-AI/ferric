@@ -19,7 +19,9 @@ ferric-macros = { path = "../ferric-macros", version = "0.1.3" }
 rand = "0.8"
 rand_distr = "0.4"
 libm = "0.2"
+nalgebra = "0.33"
 
 [dev-dependencies]
 ferric = {path="../ferric"}
 trybuild = "1.0"
+nalgebra = "0.33"

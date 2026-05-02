@@ -21,7 +21,8 @@
 //!   [`Beta`](distributions::Beta),
 //!   [`Gamma`](distributions::Gamma),
 //!   [`StudentT`](distributions::StudentT),
-//!   [`Cauchy`](distributions::Cauchy).
+//!   [`Cauchy`](distributions::Cauchy),
+//!   [`MultivariateNormal`](distributions::MultivariateNormal).
 //!
 //! See the [README](https://github.com/ferric-ai/ferric#readme) for a
 //! quick-start guide and worked examples.

@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [unreleased]
 - Added beta, binomial, cauchy, exponential, gamma, geometric, log_normal
   student_t and uniform distributions
+- Added Dirichlet distribution
+- Added Multivariate Normal distribution
+- Fixed a bug in weighted sampling
 
 ## [0.1.3] - 2026-04-30
 
