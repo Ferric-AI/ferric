@@ -1,11 +1,11 @@
 // Copyright 2022 The Ferric AI Project Developers
 use syn::parse::{Parse, ParseStream, Result};
-use syn::{Error, Expr, Ident, Token};
+use syn::{Error, Expr, Ident, Token, Type};
 
 /// StmtAst is the Abstract Syntax Tree representation of a single dependency statement.
 pub struct StmtAst {
     pub var_ident: Ident,
-    pub type_ident: Ident,
+    pub type_ident: Type,
     pub dependency: Expr,
 }
 
@@ -38,7 +38,7 @@ impl Parse for ModelAst {
                 input.parse::<Token![let]>().expect("peek confirmed");
                 let var_ident: Ident = input.parse()?;
                 input.parse::<Token![:]>()?;
-                let type_ident: Ident = input.parse()?;
+                let type_ident: Type = input.parse()?;
                 input.parse::<Token![~]>()?;
                 let dependency: Expr = input.parse()?;
                 input.parse::<Token![;]>()?;
@@ -141,7 +141,7 @@ fn test_parse_errors_per_token() {
     assert!(parse2::<ModelAst>(quote!(mod m; let ;)).is_err());
     // `let x` with no `:`.
     assert!(parse2::<ModelAst>(quote!(mod m; let x ;)).is_err());
-    // `let x :` with no type_ident.
+    // `let x :` with no type.
     assert!(parse2::<ModelAst>(quote!(mod m; let x : ;)).is_err());
     // `let x : bool` with no `~`.
     assert!(parse2::<ModelAst>(quote!(mod m; let x : bool ;)).is_err());
@@ -208,7 +208,7 @@ fn test_parse_output() {
     assert_eq!(model_ast.use_exprs.len(), 1);
 
     let exp_var_name: Ident = parse_quote!(rain);
-    let exp_type_name: Ident = parse_quote!(bool);
+    let exp_type_name: Type = parse_quote!(bool);
     let exp_dependency: &Expr = &parse_quote!(Bernoulli::new(0.2));
     assert_eq!(model_ast.stmts[0].var_ident, exp_var_name);
     assert_eq!(model_ast.stmts[0].type_ident, exp_type_name);
@@ -221,4 +221,23 @@ fn test_parse_output() {
 
     let exp_observes_0: Ident = parse_quote!(grass_wet);
     assert_eq!(model_ast.observes, [exp_observes_0]);
+}
+
+#[test]
+fn test_parse_vec_type() {
+    use quote::quote;
+    use syn::{parse_quote, parse2};
+
+    let model_ast = parse2::<ModelAst>(quote!(
+        mod dirichlet_model;
+        use ferric::distributions::Dirichlet;
+
+        let theta : Vec<f64> ~ Dirichlet::new(vec![1.0, 1.0, 1.0]);
+
+        query theta;
+    ))
+    .unwrap();
+
+    let exp_type: Type = parse_quote!(Vec<f64>);
+    assert_eq!(model_ast.stmts[0].type_ident, exp_type);
 }

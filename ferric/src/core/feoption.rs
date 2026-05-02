@@ -116,6 +116,37 @@ impl<T> FeOption<T> {
             Unknown => unwrap_failed_unknown(),
         }
     }
+
+    /// Returns a clone of the contained [`Known`] value without consuming `self`.
+    ///
+    /// Unlike [`unwrap`](FeOption::unwrap), this borrows `self` and clones the
+    /// inner value.  This is needed when the value is stored inside a struct
+    /// field (`&mut self`) rather than owned outright — for example, in the
+    /// generated `World::eval_*` methods where `self.var_x` cannot be moved.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the self value equals [`Unknown`] or [`Null`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ferric::*;
+    /// let x: FeOption<Vec<i32>> = Known(vec![1, 2, 3]);
+    /// assert_eq!(x.unwrap_clone(), vec![1, 2, 3]);
+    /// // x is still accessible because we only cloned
+    /// assert!(x.is_known());
+    /// ```
+    pub fn unwrap_clone(&self) -> T
+    where
+        T: Clone,
+    {
+        match self {
+            Known(val) => val.clone(),
+            Null => unwrap_failed_null(),
+            Unknown => unwrap_failed_unknown(),
+        }
+    }
 }
 
 // Non-generic, cold panic helpers. Pulling the panic out of the generic
@@ -185,6 +216,28 @@ mod tests {
     fn unwrap_unknown_panics() {
         let u: FeOption<u32> = Unknown;
         let _ = u.unwrap();
+    }
+
+    #[test]
+    fn unwrap_clone_known_returns_clone() {
+        let k: FeOption<Vec<i32>> = Known(vec![1, 2, 3]);
+        assert_eq!(k.unwrap_clone(), vec![1, 2, 3]);
+        // original is not consumed
+        assert!(k.is_known());
+    }
+
+    #[test]
+    #[should_panic(expected = "called `FeOption::unwrap()` on a `Null` value")]
+    fn unwrap_clone_null_panics() {
+        let n: FeOption<Vec<i32>> = Null;
+        let _ = n.unwrap_clone();
+    }
+
+    #[test]
+    #[should_panic(expected = "called `FeOption::unwrap()` on an `Unknown` value")]
+    fn unwrap_clone_unknown_panics() {
+        let u: FeOption<Vec<i32>> = Unknown;
+        let _ = u.unwrap_clone();
     }
 
     #[test]

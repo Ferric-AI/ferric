@@ -1,13 +1,13 @@
 // Copyright 2022 The Ferric AI Project Developers
 use std::collections::HashMap;
-use syn::{Error, Expr, Ident};
+use syn::{Error, Expr, Ident, Type};
 
 use crate::parse::ModelAst;
 
 /// VariableIR is the Intermediate Representation of a random variable.
 pub struct VariableIR {
     pub var_ident: Ident,
-    pub type_ident: Ident,
+    pub type_ident: Type,
     pub dependency: Expr,
     pub is_queried: bool,
     pub is_observed: bool,
@@ -213,7 +213,7 @@ fn test_analyze_output() {
 
     let var = model_ir.variables.get(&String::from("rain")).unwrap();
     let exp_var_name: Ident = parse_quote!(rain);
-    let exp_type_name: Ident = parse_quote!(bool);
+    let exp_type_name: Type = parse_quote!(bool);
     let exp_dependency: &Expr = &parse_quote!(Bernoulli::new(0.2));
     assert_eq!(var.var_ident, exp_var_name);
     assert_eq!(var.type_ident, exp_type_name);

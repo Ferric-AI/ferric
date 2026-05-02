@@ -2,7 +2,7 @@
 use proc_macro2::{Delimiter, Group, TokenStream, TokenTree};
 use quote::{format_ident, quote};
 use std::collections::HashMap;
-use syn::Ident;
+use syn::{Ident, Type};
 
 use crate::analyze::{ModelIR, VariableIR};
 
@@ -20,19 +20,19 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
 
     // for all let <variable name> statements
     let mut var_idents = Vec::<Ident>::new(); // var_<variable name>
-    let mut var_type_idents = Vec::<Ident>::new(); // <variable's type name>
+    let mut var_type_idents = Vec::<Type>::new(); // <variable's type>
     let mut var_eval_idents = Vec::<Ident>::new(); // eval_<variable name>
     let mut var_eval_dist_idents = Vec::<Ident>::new(); // evaldist_<variable name>
     let mut eval_dist_exprs = Vec::<TokenStream>::new(); // expression for evaldist_<variable name>
 
     // for all query <variable name> statements
     let mut query_idents = Vec::<Ident>::new(); // <variable name>
-    let mut query_type_idents = Vec::<Ident>::new(); // <variable's type name>
+    let mut query_type_idents = Vec::<Type>::new(); // <variable's type>
     let mut query_eval_var_idents = Vec::<Ident>::new(); // eval_<variable name>
 
     // for all observe <variable name> statements
     let mut obs_idents = Vec::<Ident>::new(); // <variable name>
-    let mut obs_type_idents = Vec::<Ident>::new(); // <variable's type name>
+    let mut obs_type_idents = Vec::<Type>::new(); // <variable's type>
     let mut obs_obs_idents = Vec::<Ident>::new(); // obs_<variable name>
     let mut obs_eval_idents = Vec::<Ident>::new(); // eval_<variable name>  (rejection sampling)
     let mut obs_eval_dist_idents = Vec::<Ident>::new(); // evaldist_<variable name>  (importance sampling)
@@ -132,7 +132,7 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                     World::new(
                         rand::thread_rng(),
                         #(
-                            self.#obs_idents,
+                            self.#obs_idents.clone(),
                         )*
                     )
                 }
@@ -161,7 +161,7 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                     WeightedWorld(World::new(
                         rand::thread_rng(),
                         #(
-                            self.#obs_idents,
+                            self.#obs_idents.clone(),
                         )*
                     ))
                 }
@@ -219,8 +219,11 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                     loop {
                         self.reset();
                         #(
-                            if self.#obs_obs_idents != self.#obs_eval_idents() {
-                                continue;
+                            {
+                                let sampled = self.#obs_eval_idents();
+                                if self.#obs_obs_idents != sampled {
+                                    continue;
+                                }
                             }
                         )*
                         return Sample {
@@ -268,7 +271,7 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                         self.#var_idents = FeOption::Known(dist.sample(&mut self.rng));
                     }
                     // TODO: handle the case when the value is Null
-                    self.#var_idents.unwrap()
+                    self.#var_idents.unwrap_clone()
                 }
 
                 pub fn #var_eval_dist_idents(&mut self) -> Box<dyn ferric::distributions::Distribution<R, Domain=#var_type_idents>> {
@@ -323,7 +326,7 @@ fn output_is_module_item() {
                 String::from("rain"),
                 VariableIR {
                     var_ident: Ident::new(&String::from("rain"), Span::call_site()),
-                    type_ident: Ident::new(&String::from("bool"), Span::call_site()),
+                    type_ident: parse_quote!(bool),
                     dependency: parse_quote!(Bernoulli::new(0.2)),
                     is_queried: true,
                     is_observed: false,
@@ -333,7 +336,7 @@ fn output_is_module_item() {
                 String::from("sprinkler"),
                 VariableIR {
                     var_ident: Ident::new(&String::from("sprinkler"), Span::call_site()),
-                    type_ident: Ident::new(&String::from("bool"), Span::call_site()),
+                    type_ident: parse_quote!(bool),
                     dependency: parse_quote!(if rain {
                         Bernoulli::new(0.01)
                     } else {
