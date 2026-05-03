@@ -22,9 +22,11 @@
 //!   [`Gamma`](distributions::Gamma),
 //!   [`StudentT`](distributions::StudentT),
 //!   [`Cauchy`](distributions::Cauchy),
-//!   [`MultivariateNormal`](distributions::MultivariateNormal).
+//!   [`MultivariateNormal`](distributions::MultivariateNormal),
+//!   [`MatrixNormal`](distributions::MatrixNormal), and
+//!   [`Wishart`](distributions::Wishart).
 //!
-//! See the [README](https://github.com/ferric-ai/ferric#readme) for a
+//! See the [README](https://github.com/Ferric-AI/ferric#readme) for a
 //! quick-start guide and worked examples.
 
 // re-export make_model from the ferric-macros crate
@@ -42,7 +44,7 @@ pub use FeOption::{Known, Null, Unknown};
 ///
 /// Given a collection of values $x_i$ and their corresponding log importance
 /// weights $\tilde{w}_i$ (unnormalised, in log space), this computes the
-/// self-normalised importance-sampling (SNIS) estimate of $\mathbb{E}[X]$:
+/// self-normalised importance-sampling (SNIS) estimate of $\mathbb{E}(X)$:
 ///
 /// $$\hat{\mu} = \frac{\sum_i w_i x_i}{\sum_i w_i},
 ///   \qquad w_i = e^{\tilde{w}_i - \max_j \tilde{w}_j}$$

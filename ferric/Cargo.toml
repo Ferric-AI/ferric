@@ -1,21 +1,21 @@
 [package]
 name = "ferric"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 authors = ["Nimar Arora <nimar.arora@gmail.com>"]
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 description = "A Probablistic Programming Language with a declarative syntax for random variables."
 readme = "../README.md"
-repository = "https://github.com/ferric-ai/ferric"
-homepage = "https://ferric.ai"
+repository = "https://github.com/Ferric-AI/ferric"
+homepage = "https://github.com/Ferric-AI/ferric"
 keywords = ["probabilistic", "programming", "generative", "bayesian", "mcmc"]
 categories = ["mathematics", "science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ferric-macros = { path = "../ferric-macros", version = "0.1.3" }
+ferric-macros = { path = "../ferric-macros", version = "0.1.4" }
 rand = "0.8"
 rand_distr = "0.4"
 libm = "0.2"

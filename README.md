@@ -1,4 +1,4 @@
-[![Github Actions Tests](https://github.com/ferric-ai/ferric/actions/workflows/ci.yml/badge.svg)](https://github.com/Ferric-AI/ferric/actions/workflows/ci.yml)
+[![Github Actions Tests](https://github.com/Ferric-AI/ferric/actions/workflows/ci.yml/badge.svg)](https://github.com/Ferric-AI/ferric/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/ferric.svg)](https://crates.io/crates/ferric)
 [![Coverage Status](https://coveralls.io/repos/github/Ferric-AI/ferric/badge.svg)](https://coveralls.io/github/Ferric-AI/ferric)
 
@@ -130,17 +130,55 @@ named `log_weight`.
 | Distribution | Domain | Parameters |
 |---|---|---|
 | `Bernoulli` | `bool` | `p ∈ [0, 1]` |
+| `Dirac<T>` | `T` | deterministic `value` |
+| `Empirical<T>` | `T` | finite weighted support |
+| `Categorical` | `usize` | non-negative category weights |
 | `Binomial` | `u64` | `n ≥ 1`, `p ∈ (0, 1)` |
+| `BetaBinomial` | `u64` | `n ≥ 1`, `alpha > 0`, `beta > 0` |
+| `DiscreteUniform` | `i64` | `a ≤ b` |
 | `Geometric` | `u64` | `p ∈ (0, 1]` |
+| `Hypergeometric` | `u64` | population, successes, draws |
+| `NegativeBinomial` | `u64` | `r > 0`, `p ∈ (0, 1]` |
 | `Poisson` | `u64` | `rate > 0` |
 | `Uniform` | `f64` | `low < high` |
 | `Exponential` | `f64` | `rate > 0` |
 | `Normal` | `f64` | `mean`, `std_dev > 0` |
 | `LogNormal` | `f64` | `mu`, `sigma > 0` |
 | `Beta` | `f64` | `alpha > 0`, `beta > 0` |
-| `Gamma` | `f64` | `shape > 0`, `scale > 0` |
-| `StudentT` | `f64` | `df > 0` |
 | `Cauchy` | `f64` | `median`, `scale > 0` |
+| `Chi` | `f64` | `k > 0` |
+| `ChiSquared` | `f64` | `k > 0` |
+| `Erlang` | `f64` | integer `k ≥ 1`, `lambda > 0` |
+| `FisherF` | `f64` | `d1 > 0`, `d2 > 0` |
+| `Frechet` | `f64` | `location`, `scale > 0`, `shape > 0` |
+| `Gamma` | `f64` | `shape > 0`, `scale > 0` |
+| `Gumbel` | `f64` | `mu`, `beta > 0` |
+| `HalfNormal` | `f64` | `sigma > 0` |
+| `InverseGamma` | `f64` | `alpha > 0`, `beta > 0` |
+| `InverseGaussian` | `f64` | `mu > 0`, `lambda > 0` |
+| `Laplace` | `f64` | `mu`, `b > 0` |
+| `Logistic` | `f64` | `mu`, `s > 0` |
+| `Pareto` | `f64` | `x_m > 0`, `alpha > 0` |
+| `Rayleigh` | `f64` | `sigma > 0` |
+| `StudentT` | `f64` | `df > 0` |
+| `Triangular` | `f64` | `a ≤ c ≤ b`, `a < b` |
+| `Weibull` | `f64` | `lambda > 0`, `k > 0` |
+| `Dirichlet` | `Vec<f64>` | concentration vector, each `alpha_i > 0` |
+| `Multinomial` | `Vec<u64>` | `n ≥ 1`, probability vector |
+| `MultivariateNormal` | `nalgebra::DVector<f64>` | mean vector, SPD covariance matrix |
+| `MultivariateStudentT` | `nalgebra::DVector<f64>` | mean vector, SPD scale matrix, `df > 0` |
+| `MatrixNormal` | `nalgebra::DMatrix<f64>` | mean matrix, SPD row and column covariance matrices |
+| `Wishart` | `nalgebra::DMatrix<f64>` | `df > p - 1`, SPD scale matrix |
+
+## Documentation
+
+Ferric's API documentation is published automatically by [docs.rs](https://docs.rs/ferric)
+when a new crate version is published to crates.io. There is no separate official Rust
+documentation host to push to manually; the canonical Rust crate docs live on docs.rs.
+
+For project docs beyond API reference, keep them in this repository unless they grow into
+a distinct website. A separate `Ferric-AI/docs` repo would add coordination overhead right
+now, while docs.rs plus this README gives users the normal Rust discovery path.
 
 ## License
 

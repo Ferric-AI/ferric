@@ -146,3 +146,16 @@ crates.io renders the `readme` field (the `README.md`). docs.rs renders the crat
 
 Duplicating large blocks between the two causes the crates.io and docs.rs pages to look
 redundant when a user navigates between them.
+
+docs.rs builds and publishes the official Rust API documentation automatically after each
+successful `cargo publish`. You do not manually upload generated HTML to docs.rs. To check
+the docs before publishing, run:
+
+```bash
+cargo doc --workspace --no-deps
+```
+
+If the project later needs narrative docs beyond API reference and README material, prefer
+adding them under this repository first (for example `docs/`). Use a separate
+`Ferric-AI/docs` repository only if the docs become an independent website or need their
+own deployment pipeline.

@@ -16,3 +16,5 @@ coverage/
 *.profraw
 
 .DS_Store
+
+.claude

@@ -5,7 +5,7 @@
 //! every [`FeOption`] is either [`Known`] and contains a value, or [`Null`], or
 //! [`Unknown`]. Note that a [`Null`] value is technically a case where the value is known.
 //!
-#[derive(Copy, Clone)]
+#[derive(Copy)]
 pub enum FeOption<T> {
     Null,
     Unknown,
@@ -13,6 +13,16 @@ pub enum FeOption<T> {
 }
 
 use FeOption::{Known, Null, Unknown};
+
+impl<T: Clone> Clone for FeOption<T> {
+    fn clone(&self) -> Self {
+        match self {
+            Null => Null,
+            Unknown => Unknown,
+            Known(value) => Known(value.clone()),
+        }
+    }
+}
 
 impl<T> FeOption<T> {
     /// Returns `true` if the FeOption is a [`Null`] value.
@@ -261,5 +271,12 @@ mod tests {
         assert!(k_clone.is_known());
         assert!(n_clone.is_null());
         assert!(u_clone.is_unknown());
+
+        let vec_known: FeOption<Vec<i32>> = Known(vec![1, 2]);
+        let vec_null: FeOption<Vec<i32>> = Null;
+        let vec_unknown: FeOption<Vec<i32>> = Unknown;
+        assert_eq!(vec_known.clone().unwrap(), vec![1, 2]);
+        assert!(vec_null.clone().is_null());
+        assert!(vec_unknown.clone().is_unknown());
     }
 }
