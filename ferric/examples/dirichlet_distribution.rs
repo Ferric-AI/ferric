@@ -3,7 +3,7 @@
 use ferric::make_model;
 
 make_model! {
-    mod dirichlet_distribution;
+    name dirichlet_distribution;
     use ferric::distributions::Dirichlet;
     use ferric::distributions::Multinomial;
 

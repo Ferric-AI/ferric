@@ -12,7 +12,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ferric = "0.1"
+ferric = "0.2"
 ```
 
 ## How it works
@@ -21,6 +21,7 @@ Ferric's `make_model!` macro declares a Bayesian model and the relationships bet
 variables. Inside the macro you:
 
 - Define random variables and their distributions using `let name : Type ~ Distribution;`.
+- Define model constants using `const name : Type;`.
 - Mark variables with `observe` to condition the model on observed data.
 - Mark variables with `query` to include variables in posterior samples.
 
@@ -40,7 +41,7 @@ exact draw from the posterior.
 use ferric::make_model;
 
 make_model! {
-    mod grass;
+    name grass;
     use ferric::distributions::Bernoulli;
 
     let rain       : bool ~ Bernoulli::new(0.2);
@@ -89,7 +90,7 @@ weighted samples.
 use ferric::make_model;
 
 make_model! {
-    mod signal_estimation;
+    name signal_estimation;
     use ferric::distributions::Normal;
 
     // prior: true signal unknown
@@ -124,6 +125,174 @@ fn main() {
 The `WeightedSample` type nests query variables under `.sample.*` and exposes the metadata
 separately at `.log_weight`, so there is no naming conflict even if a query variable is
 named `log_weight`.
+
+## Indexed random variables
+
+Ferric can declare arrays of random variables by adding one or more index
+ranges after the variable name:
+
+```rust
+use ferric::make_model;
+
+make_model! {
+    name indexed_survival;
+    use ferric::distributions::Beta;
+    use ferric::distributions::Bernoulli;
+
+    const n : u64;
+    const t : u64;
+
+    let survival : f64 ~ Beta::new(99.0, 1.0);
+    let alive[person of n, time of t] : bool ~ if time == 0 {
+        Bernoulli::new(1.0)
+    } else if alive[person, time - 1] {
+        Bernoulli::new(survival)
+    } else {
+        Bernoulli::new(0.0)
+    };
+    let age[person of n] : u64 = {
+        let mut age = t;
+        for time in 0..t {
+            if !alive[person, time] {
+                age = time;
+                break;
+            }
+        }
+        age
+    };
+
+    observe age;
+    query survival;
+}
+```
+
+Each index range has the form `index_name of upper_bound`. The upper bound
+must be a constant or an earlier variable in the model. The index takes values
+from `0` through `upper_bound - 1`; if the upper bound is zero, the indexed
+variable has no values. The generated query type is a nested `Vec`, so `alive`
+is `Vec<Vec<bool>>` and `age` is `Vec<u64>`.
+
+Constants are supplied when the generated `Model` is constructed:
+
+```rust
+let model = indexed_survival::Model {
+    n: 3,
+    t: 10,
+    age: vec![4, 7, 10],
+};
+```
+
+Observed indexed stochastic variables use nested vectors with `Option<T>` at
+the leaves. `Some(value)` is an observed value and `None` masks a missing
+entry. Directly observed indexed variables must have constant-valued bounds,
+or variable bounds that are themselves observed.
+
+An index upper bound may also be stochastic:
+
+```rust
+make_model! {
+    name random_length;
+    use ferric::distributions::Bernoulli;
+    use ferric::distributions::Poisson;
+
+    const max_n : u64;
+
+    let n : u64 ~ Poisson::new(4.0) max max_n;
+    let flips[flip of n] : bool ~ Bernoulli::new(0.5);
+    let num_heads : u64 = flips.iter().filter(|&&flip| flip).count() as u64;
+
+    observe num_heads;
+    query n;
+}
+
+let model = random_length::Model {
+    max_n: 10,
+    num_heads: 4,
+};
+```
+
+When a stochastic variable is used as an index bound, Ferric requires an
+explicit `max ...` annotation on that variable. The max value must be a
+literal or a previously declared constant of the same type as the variable.
+The annotation bounds the random variable's domain. For example,
+`n ~ Poisson::new(3.0) max 100` means `n` may take values `0..=100`, and
+likelihoods are normalized over that bounded domain using
+`Distribution::log_cum_prob`.
+
+Distribution and deterministic expressions inside indexed variables can refer
+to the explicitly named indices. Deterministic variables can depend on indexed
+variables, including arrays whose size depends on a stochastic bound. This
+supports observed aggregates such as counts or summaries when the raw array
+cardinality is latent. See `examples/urn_unknown_marbles.rs` for a complete
+unknown-urn-size example.
+
+### Gelfand Rats Model
+
+The rats example in `examples/rats.rs` writes the classic Gelfand hierarchical
+growth model with the full observed 30-rat weight table. It is included as a
+language example for indexed continuous observations and hierarchical
+dependencies. The current inference methods are not intended to solve this
+model well; later samplers will make this kind of posterior practical.
+
+### Radar Simulation Sketch
+
+The radar example in `examples/radar.rs` shows a richer simulation-only model.
+The number of aircraft is Poisson-bounded. Each aircraft has a 3D latent path:
+the first timestep is drawn from a broad Gaussian, and later timesteps move
+with a narrow Gaussian transition around the previous location. Real blips are
+small-Gaussian measurements around their aircraft. False blips have their own
+bounded count at each timestep and broad-Gaussian locations. A deterministic
+query collects the set of all real and false blip locations for every timestep.
+This example is meant for forward simulation; later inference methods will make
+conditioning on the generated blip sets practical.
+
+```rust
+make_model! {
+    name radar;
+    use ferric::distributions::MultivariateNormal;
+    use ferric::distributions::Poisson;
+    use nalgebra::DVector;
+    use std::collections::HashSet;
+    use super::BlipLocation;
+    use super::{blip_covariance, origin_3d, transition_covariance, wide_covariance};
+
+    const max_aircraft : u64;
+    const max_real_blips_per_aircraft : u64;
+    const max_false_blips_per_timestep : u64;
+    const time_steps : u64;
+
+    let n : u64 ~ Poisson::new(2.0) max max_aircraft;
+    let aircraft_location[aircraft of n, time of time_steps] : DVector<f64> ~ if time == 0 {
+        MultivariateNormal::new(origin_3d(), wide_covariance())
+    } else {
+        MultivariateNormal::new(
+            aircraft_location[aircraft, time - 1].clone(),
+            transition_covariance(),
+        )
+    };
+    let num_real_blip[aircraft of n, time of time_steps] : u64 ~
+        Poisson::new(1.2) max max_real_blips_per_aircraft;
+    let real_blip_location[aircraft of n, blip of max_real_blips_per_aircraft, time of time_steps] : DVector<f64> ~
+        MultivariateNormal::new(
+            aircraft_location[aircraft, time].clone(),
+            blip_covariance(),
+        );
+
+    let num_false_blip[time of time_steps] : u64 ~
+        Poisson::new(1.0) max max_false_blips_per_timestep;
+    let false_blip_location[false_blip of max_false_blips_per_timestep, time of time_steps] : DVector<f64> ~
+        MultivariateNormal::new(origin_3d(), wide_covariance());
+
+    let all_blip_locations[time of time_steps] : HashSet<BlipLocation> = {
+        let mut locations = HashSet::new();
+        // collect real blips and false blips for this timestep
+        locations
+    };
+
+    query n;
+    query all_blip_locations;
+}
+```
 
 ## Available distributions
 

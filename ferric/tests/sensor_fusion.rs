@@ -19,7 +19,7 @@ use ferric::make_model;
 #[test]
 fn sensor_fusion() {
     make_model! {
-        mod sensor_fusion;
+        name sensor_fusion;
         use ferric::distributions::Normal;
 
         let true_mean : f64 ~ Normal::new( 0.0, 3.0 );

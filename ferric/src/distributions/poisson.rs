@@ -62,6 +62,14 @@ impl<R: Rng + ?Sized> Distribution<R> for Poisson {
         k * self.rate.ln() - self.rate - log_factorial
     }
 
+    fn log_cum_prob(&self, x: &u64) -> f64 {
+        let mut cumulative = 0.0;
+        for k in 0..=*x {
+            cumulative += <Poisson as Distribution<R>>::log_prob(self, &k).exp();
+        }
+        cumulative.min(1.0).ln()
+    }
+
     fn is_discrete(&self) -> bool {
         true
     }
@@ -122,6 +130,11 @@ mod tests {
         // display and is_discrete
         assert!(format!("{}", dist).contains("Poisson"));
         assert!(Distribution::<rand::rngs::ThreadRng>::is_discrete(&dist));
+        let below = Distribution::<rand::rngs::ThreadRng>::log_cum_prob(&dist, &2u64);
+        let expected_below = Distribution::<rand::rngs::ThreadRng>::log_prob(&dist, &0u64).exp()
+            + Distribution::<rand::rngs::ThreadRng>::log_prob(&dist, &1u64).exp()
+            + Distribution::<rand::rngs::ThreadRng>::log_prob(&dist, &2u64).exp();
+        assert!((below.exp() - expected_below).abs() < 1e-12);
         // zero rate should be rejected
         let bad = Poisson::new(0.0);
         assert!(bad.is_err());

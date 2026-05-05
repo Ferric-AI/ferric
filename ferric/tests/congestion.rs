@@ -12,7 +12,7 @@ use ferric::make_model;
 #[test]
 fn congestion() {
     make_model! {
-        mod congestion;
+        name congestion;
         use ferric::distributions::Bernoulli;
         use ferric::distributions::Poisson;
 

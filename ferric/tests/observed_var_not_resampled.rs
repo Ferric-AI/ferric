@@ -10,7 +10,7 @@ use ferric::make_model;
 // Observation: var1 = 1.0  (probability of success is 1.0)
 // Query:       var2
 //
-// Because var1 is clamped to 1.0, Bernoulli(1.0) always fires, so every
+// Because var1 is pinned to the observed value 1.0, Bernoulli(1.0) always fires, so every
 // sample of var2 must be `true`.  If reset() incorrectly sets var1 back to
 // Unknown and the eval path re-samples it from the prior, some samples will
 // draw var1 < 1.0 and produce var2 = false, causing the assertion to fail.
@@ -18,7 +18,7 @@ use ferric::make_model;
 #[test]
 fn observed_var_not_resampled() {
     make_model! {
-        mod observed_var_not_resampled;
+        name observed_var_not_resampled;
         use ferric::distributions::Beta;
         use ferric::distributions::Bernoulli;
 

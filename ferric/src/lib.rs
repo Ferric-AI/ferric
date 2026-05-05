@@ -1,33 +1,234 @@
 // Copyright 2022 The Ferric AI Project Developers
 
-//! A probabilistic programming language in Rust with a declarative syntax for
-//! Bayesian models.
+//! Ferric is a small probabilistic programming language embedded in Rust.
 //!
-//! # Key entry points
+//! You write a model with [`make_model!`], using ordinary Rust expressions for
+//! deterministic dependencies and Ferric distributions for stochastic random
+//! variables. The macro expands to a Rust module containing a `Model` type,
+//! query sample types, and samplers.
 //!
-//! - [`make_model!`] — declare a probabilistic model; expands into a module
-//!   with `Model`, `Sample`, `WeightedSample`, and two iterator types.
-//! - [`weighted_mean`] / [`weighted_std`] — posterior summaries from
-//!   self-normalised importance-sampling (SNIS) weights.
-//! - [`distributions`] — built-in probability distributions:
-//!   [`Bernoulli`](distributions::Bernoulli),
-//!   [`Binomial`](distributions::Binomial),
-//!   [`Geometric`](distributions::Geometric),
-//!   [`Poisson`](distributions::Poisson),
-//!   [`Uniform`](distributions::Uniform),
-//!   [`Exponential`](distributions::Exponential),
-//!   [`Normal`](distributions::Normal),
-//!   [`LogNormal`](distributions::LogNormal),
-//!   [`Beta`](distributions::Beta),
-//!   [`Gamma`](distributions::Gamma),
-//!   [`StudentT`](distributions::StudentT),
-//!   [`Cauchy`](distributions::Cauchy),
-//!   [`MultivariateNormal`](distributions::MultivariateNormal),
-//!   [`MatrixNormal`](distributions::MatrixNormal), and
-//!   [`Wishart`](distributions::Wishart).
+//! # Minimal Example
 //!
-//! See the [README](https://github.com/Ferric-AI/ferric#readme) for a
-//! quick-start guide and worked examples.
+//! ```
+//! use ferric::make_model;
+//!
+//! make_model! {
+//!     name coin;
+//!     use ferric::distributions::Bernoulli;
+//!
+//!     const draws : u64;
+//!
+//!     let fair : bool ~ Bernoulli::new(0.5);
+//!     let draw[trial of draws] : bool ~ if fair {
+//!         Bernoulli::new(0.5)
+//!     } else {
+//!         Bernoulli::new(0.8)
+//!     };
+//!     let heads : u64 = draw.iter().filter(|&&is_head| is_head).count() as u64;
+//!
+//!     observe heads;
+//!     query fair;
+//! }
+//!
+//! let model = coin::Model {
+//!     draws: 6,
+//!     heads: 5,
+//! };
+//! let num_samples = 100;
+//! let mut fair_count = 0;
+//! for sample in model.sample_iter().take(num_samples) {
+//!     if sample.fair {
+//!         fair_count += 1;
+//!     }
+//! }
+//! let prob_fair = fair_count as f64 / num_samples as f64;
+//! assert!((0.0..=1.0).contains(&prob_fair));
+//! ```
+//!
+//! # Language Overview
+//!
+//! A model starts with `name model_name;`, optional `use` statements, optional
+//! constants, then variable declarations, observations, and queries.
+//!
+//! ```text
+//! make_model! {
+//!     name my_model;
+//!     use ferric::distributions::Normal;
+//!
+//!     const known_value : f64;
+//!
+//!     let latent : f64 ~ Normal::new(0.0, 1.0);
+//!     let measured : f64 ~ Normal::new(latent, known_value);
+//!
+//!     observe measured;
+//!     query latent;
+//! }
+//! ```
+//!
+//! Constants become public fields on the generated `Model`. Observed variables
+//! also become public fields and must be supplied when constructing the model:
+//!
+//! ```text
+//! let model = my_model::Model {
+//!     known_value: 0.25,
+//!     measured: 1.2,
+//! };
+//! ```
+//!
+//! # Stochastic And Deterministic Variables
+//!
+//! Use `~` for a stochastic variable drawn from a distribution:
+//!
+//! ```text
+//! let x : f64 ~ Normal::new(0.0, 1.0);
+//! ```
+//!
+//! Use `=` for a deterministic variable:
+//!
+//! ```text
+//! let shifted : f64 = x + 3.0;
+//! ```
+//!
+//! Dependencies are Rust expressions. Earlier variables and constants may be
+//! referenced by name; Ferric rewrites those references into generated model
+//! evaluation calls. Distribution constructors usually return `Result`, so
+//! Ferric-generated code unwraps them after your model expression is evaluated.
+//!
+//! # Observations And Queries
+//!
+//! `observe variable;` conditions on a value supplied in the generated
+//! `Model`. `query variable;` includes a variable in each returned sample.
+//!
+//! Rejection sampling is available through `sample_iter()` and is only
+//! appropriate when all observations are discrete. Self-normalised importance
+//! sampling is available through `weighted_sample_iter()` when every observed
+//! variable is stochastic:
+//!
+//! ```
+//! use ferric::{make_model, weighted_mean};
+//!
+//! make_model! {
+//!     name noisy_coin;
+//!     use ferric::distributions::Bernoulli;
+//!
+//!     let fair : bool ~ Bernoulli::new(0.5);
+//!     let reported : bool ~ if fair {
+//!         Bernoulli::new(0.9)
+//!     } else {
+//!         Bernoulli::new(0.1)
+//!     };
+//!
+//!     observe reported;
+//!     query fair;
+//! }
+//!
+//! let model = noisy_coin::Model { reported: true };
+//! let mut values = Vec::new();
+//! let mut weights = Vec::new();
+//! for sample in model.weighted_sample_iter().take(100) {
+//!     values.push(sample.sample.fair as u8 as f64);
+//!     weights.push(sample.log_weight);
+//! }
+//! let posterior_mean = weighted_mean(&values, &weights);
+//! assert!((0.0..=1.0).contains(&posterior_mean));
+//! ```
+//!
+//! # Indexed Random Variables
+//!
+//! Ferric supports one or more dimensions of indexed random variables. Each
+//! dimension is written as `name of upper`, where `name` is the local index
+//! variable and `upper` is a previously declared constant or variable. The
+//! index takes values from `0` through `upper - 1`.
+//!
+//! ```text
+//! const n : u64;
+//! const t : u64;
+//!
+//! let survival : f64 ~ Beta::new(99.0, 1.0);
+//! let alive[person of n, time of t] : bool ~ if time == 0 {
+//!     Bernoulli::new(1.0)
+//! } else if alive[person, time - 1] {
+//!     Bernoulli::new(survival)
+//! } else {
+//!     Bernoulli::new(0.0)
+//! };
+//! let age[person of n] : u64 = {
+//!     let mut age = t;
+//!     for time in 0..t {
+//!         if !alive[person, time] {
+//!             age = time;
+//!             break;
+//!         }
+//!     }
+//!     age
+//! };
+//! observe age;
+//! query survival;
+//! ```
+//!
+//! Indexed query values are nested `Vec`s. Indexed observations are nested
+//! `Vec<Option<T>>`; `Some(value)` observes that entry and `None` masks it as
+//! missing.
+//!
+//! # Random Lengths And `max`
+//!
+//! An indexed variable can be bounded by a stochastic integer-valued variable:
+//!
+//! ```text
+//! const max_n : u64;
+//!
+//! let n : u64 ~ ferric::distributions::Poisson::new(4.0) max max_n;
+//! let flips[flip of n] : bool ~ ferric::distributions::Bernoulli::new(0.5);
+//! let heads : u64 = flips.iter().filter(|&&x| x).count() as u64;
+//!
+//! observe heads;
+//! query n;
+//! ```
+//!
+//! The `max` annotation is a bounded-domain declaration. For example
+//! `n ~ Poisson::new(3.0) max 100` means the domain of `n` is `0..=100`;
+//! values above 100 are outside the model. Ferric normalizes bounded
+//! likelihoods by subtracting [`distributions::Distribution::log_cum_prob`],
+//! the log CDF at the bound. Generated worlds cache that value so each bounded
+//! variable value computes the normalization term once per sampled world state.
+//!
+//! # Distributions
+//!
+//! Built-in scalar, vector, and matrix distributions live in [`distributions`].
+//! Common choices include [`Bernoulli`](distributions::Bernoulli),
+//! [`Binomial`](distributions::Binomial),
+//! [`Categorical`](distributions::Categorical),
+//! [`Poisson`](distributions::Poisson),
+//! [`DiscreteUniform`](distributions::DiscreteUniform),
+//! [`Normal`](distributions::Normal),
+//! [`Gamma`](distributions::Gamma),
+//! [`Beta`](distributions::Beta),
+//! [`Dirichlet`](distributions::Dirichlet),
+//! [`Multinomial`](distributions::Multinomial),
+//! [`MultivariateNormal`](distributions::MultivariateNormal),
+//! [`MatrixNormal`](distributions::MatrixNormal), and
+//! [`Wishart`](distributions::Wishart).
+//!
+//! Each distribution page documents its parameters, support, sampling behavior,
+//! and log probability.
+//!
+//! # Worked Examples
+//!
+//! The repository examples show complete models:
+//!
+//! - Dirichlet-multinomial conjugacy:
+//!   <https://github.com/Ferric-AI/ferric/blob/main/ferric/examples/dirichlet_distribution.rs>
+//! - Multivariate normal sensor inference:
+//!   <https://github.com/Ferric-AI/ferric/blob/main/ferric/examples/multivariate_normal.rs>
+//! - Indexed unknown-cardinality urn model:
+//!   <https://github.com/Ferric-AI/ferric/blob/main/ferric/examples/urn_unknown_marbles.rs>
+//! - Radar forward simulation with named indices:
+//!   <https://github.com/Ferric-AI/ferric/blob/main/ferric/examples/radar.rs>
+//! - Gelfand rats hierarchical growth model:
+//!   <https://github.com/Ferric-AI/ferric/blob/main/ferric/examples/rats.rs>
+//!
+//! See the [README](https://github.com/Ferric-AI/ferric#readme) for release
+//! notes, publishing notes, and a shorter tour.
 
 // re-export make_model from the ferric-macros crate
 pub use ferric_macros::make_model;
@@ -39,6 +240,37 @@ pub mod distributions;
 // re-export FeOption and its variants
 pub use self::core::FeOption;
 pub use FeOption::{Known, Null, Unknown};
+
+/// Mask-aware equality for generated observation checks.
+///
+/// `Option<T>` treats `None` as a missing observation and `Some(value)` as an
+/// exact observation. Nested `Vec`s recurse, which lets indexed random
+/// variables be observed with nested arrays of optional values.
+pub trait MaskedEq<T> {
+    fn masked_eq(&self, value: &T) -> bool;
+}
+
+impl<T: PartialEq> MaskedEq<T> for Option<T> {
+    fn masked_eq(&self, value: &T) -> bool {
+        match self {
+            Some(observed) => observed == value,
+            None => true,
+        }
+    }
+}
+
+impl<O, T> MaskedEq<Vec<T>> for Vec<O>
+where
+    O: MaskedEq<T>,
+{
+    fn masked_eq(&self, value: &Vec<T>) -> bool {
+        self.len() <= value.len()
+            && self
+                .iter()
+                .zip(value.iter())
+                .all(|(observed, sampled)| observed.masked_eq(sampled))
+    }
+}
 
 /// Compute the self-normalised importance-weighted mean of `values`.
 ///
@@ -138,6 +370,23 @@ pub fn weighted_std(values: &[f64], log_weights: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn masked_eq_option_and_nested_vec() {
+        assert!(Some(3).masked_eq(&3));
+        assert!(!Some(3).masked_eq(&4));
+        let missing: Option<i32> = None;
+        assert!(missing.masked_eq(&4));
+
+        let observed = vec![Some(true), None, Some(false)];
+        assert!(observed.masked_eq(&vec![true, true, false]));
+        assert!(!observed.masked_eq(&vec![true, true, true]));
+        assert!(!observed.masked_eq(&vec![true]));
+
+        let nested = vec![vec![Some(1), None], vec![Some(3), Some(4)]];
+        assert!(nested.masked_eq(&vec![vec![1, 2], vec![3, 4]]));
+        assert!(!nested.masked_eq(&vec![vec![1, 2], vec![3, 5]]));
+    }
 
     #[test]
     fn weighted_mean_uniform() {

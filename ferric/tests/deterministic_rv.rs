@@ -16,7 +16,7 @@ use ferric::make_model;
 #[test]
 fn rejection_sampling_deterministic_observation() {
     make_model! {
-        mod det_obs_reject;
+        name det_obs_reject;
         use ferric::distributions::Bernoulli;
 
         let x : bool ~ Bernoulli::new(0.5);
@@ -47,7 +47,7 @@ fn rejection_sampling_deterministic_observation() {
 #[test]
 fn weighted_sampling_deterministic_query() {
     make_model! {
-        mod det_query_weighted;
+        name det_query_weighted;
         use ferric::distributions::Bernoulli;
 
         let x : bool ~ Bernoulli::new(0.5);

@@ -3,7 +3,7 @@
 use ferric::make_model;
 
 make_model! {
-    mod deterministic_dependency;
+    name deterministic_dependency;
     use ferric::distributions::Bernoulli;
     use ferric::distributions::Normal;
 

@@ -17,7 +17,7 @@ use ferric::make_model;
 use std::time::Instant;
 
 make_model! {
-    mod signal_estimation;
+    name signal_estimation;
     use ferric::distributions::Normal;
 
     let true_signal : f64 ~ Normal::new( 0.0, 2.0 );

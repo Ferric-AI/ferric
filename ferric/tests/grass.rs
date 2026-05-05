@@ -8,7 +8,7 @@ use ferric::make_model;
 #[test]
 fn grass() {
     make_model! {
-        mod grass;
+        name grass;
         use ferric::distributions::Bernoulli;
 
         let rain : bool ~ Bernoulli::new( 0.2 );

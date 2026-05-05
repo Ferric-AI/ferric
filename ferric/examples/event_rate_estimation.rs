@@ -15,7 +15,7 @@ use ferric::make_model;
 use std::time::Instant;
 
 make_model! {
-    mod event_rate_estimation;
+    name event_rate_estimation;
     use ferric::distributions::Normal;
     use ferric::distributions::Poisson;
 

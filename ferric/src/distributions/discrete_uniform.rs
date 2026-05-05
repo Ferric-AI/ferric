@@ -65,6 +65,18 @@ impl<R: Rng + ?Sized> Distribution<R> for DiscreteUniform {
         -((self.b - self.a + 1) as f64).ln()
     }
 
+    fn log_cum_prob(&self, x: &i64) -> f64 {
+        if *x < self.a {
+            return f64::NEG_INFINITY;
+        }
+        if *x >= self.b {
+            return 0.0;
+        }
+        let below_count = *x - self.a + 1;
+        let total_count = self.b - self.a + 1;
+        ((below_count as f64) / (total_count as f64)).ln()
+    }
+
     fn is_discrete(&self) -> bool {
         true
     }
@@ -111,6 +123,12 @@ mod tests {
         // out of range → NEG_INFINITY
         let lp_out = <DiscreteUniform as Distribution<ThreadRng>>::log_prob(&dist, &0);
         assert_eq!(lp_out, f64::NEG_INFINITY);
+        let below = <DiscreteUniform as Distribution<ThreadRng>>::log_cum_prob(&dist, &2);
+        assert!((below - 0.5f64.ln()).abs() < 1e-10);
+        let empty_below = <DiscreteUniform as Distribution<ThreadRng>>::log_cum_prob(&dist, &0);
+        assert_eq!(empty_below, f64::NEG_INFINITY);
+        let full_below = <DiscreteUniform as Distribution<ThreadRng>>::log_cum_prob(&dist, &4);
+        assert_eq!(full_below, 0.0);
 
         assert!(<DiscreteUniform as Distribution<ThreadRng>>::is_discrete(
             &dist

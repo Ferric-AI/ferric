@@ -6,7 +6,7 @@
 use ferric::make_model;
 
 make_model! {
-    mod det_weighted_obs;
+    name det_weighted_obs;
     use ferric::distributions::Bernoulli;
 
     let x : bool ~ Bernoulli::new(0.5);

@@ -14,7 +14,7 @@ use ferric::make_model;
 #[test]
 fn dirichlet_multinomial() {
     make_model! {
-        mod dirichlet_multinomial;
+        name dirichlet_multinomial;
         use ferric::distributions::Dirichlet;
         use ferric::distributions::Multinomial;
 

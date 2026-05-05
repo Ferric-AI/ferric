@@ -1,4 +1,6 @@
 // Copyright 2022 The Ferric AI Project Developers
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
 use proc_macro2::TokenStream;
 use syn::parse2;
 
@@ -56,7 +58,7 @@ mod tests {
     #[test]
     fn analyze_error_produces_compile_error_tokens() {
         // Querying a variable that was never declared is an analyze error.
-        let out = make_model_inner(quote!(mod grass; query rain;));
+        let out = make_model_inner(quote!(name grass; query rain;));
         let s = out.to_string();
         assert!(s.contains("compile_error"), "got: {s}");
     }
@@ -65,7 +67,7 @@ mod tests {
     fn happy_path_runs_codegen_and_emits_module() {
         // Exercise the success branch through parse -> analyze -> codegen.
         let out = make_model_inner(quote!(
-            mod grass;
+            name grass;
             use ferric::distributions::Bernoulli;
 
             let rain : bool ~ Bernoulli::new( 0.2 );

@@ -16,7 +16,7 @@ use ferric::make_model;
 use std::time::Instant;
 
 make_model! {
-    mod congestion;
+    name congestion;
     use ferric::distributions::Bernoulli;
     use ferric::distributions::Poisson;
 

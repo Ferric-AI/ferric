@@ -13,7 +13,7 @@ use ferric::make_model;
 #[test]
 fn beta_binomial() {
     make_model! {
-        mod beta_binomial;
+        name beta_binomial;
         use ferric::distributions::Beta;
         use ferric::distributions::Binomial;
 

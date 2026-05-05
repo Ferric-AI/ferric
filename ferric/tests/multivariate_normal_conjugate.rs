@@ -20,7 +20,7 @@ use nalgebra::DVector;
 #[test]
 fn multivariate_normal_conjugate() {
     make_model! {
-        mod mvn_conjugate;
+        name mvn_conjugate;
         use ferric::distributions::MultivariateNormal;
         use nalgebra::DVector;
         use nalgebra::DMatrix;

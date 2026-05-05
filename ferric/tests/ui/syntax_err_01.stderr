@@ -1,4 +1,4 @@
-error: expected `mod`
+error: expected `name`
  --> tests/ui/syntax_err_01.rs:5:5
   |
 5 |     modu grass;

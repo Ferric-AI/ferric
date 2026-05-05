@@ -4,7 +4,7 @@ use ferric::make_model;
 use nalgebra::DVector;
 
 make_model! {
-    mod multivariate_normal_example;
+    name multivariate_normal_example;
     use ferric::distributions::MultivariateNormal;
     use nalgebra::DMatrix;
     use nalgebra::DVector;
