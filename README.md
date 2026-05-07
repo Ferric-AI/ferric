@@ -126,6 +126,61 @@ The `WeightedSample` type nests query variables under `.sample.*` and exposes th
 separately at `.log_weight`, so there is no naming conflict even if a query variable is
 named `log_weight`.
 
+### User-proposal importance sampling — `importance_sampler`
+
+For continuous models where drawing latents from the prior is inefficient, Ferric also
+generates a small proposer API.  Each model module includes:
+
+- `ObservedData`: a generated struct containing the model constants and observations.
+- `Proposal`: a generated struct whose fields correspond to latent stochastic variables.
+- `Proposer<R>`: a trait whose `initialize` method receives `ObservedData`, and whose
+  `propose` method returns one `Proposal`.
+
+The proposal's `log_prob` must be the joint log probability of every value supplied in the
+proposal.  Fields left as `None` are drawn from the model prior.  Ferric computes the sample
+weight as `log p_model(proposed values) - log q(proposed values) + log p(observations | world)`.
+For diagnostics, `importance_sampler_debug(proposer, n)` traces the first `n` worlds, printing
+the proposal, model-prior terms for proposed values, observed likelihood terms, sampled
+stochastic values, and final log weight before continuing as a normal iterator.
+The rats example also exposes this through `FERRIC_DEBUG_IMPORTANCE`; for example,
+`FERRIC_DEBUG_IMPORTANCE=1 cargo run -p ferric --example rats` traces the first
+importance sample in each rats experiment.
+
+```rust
+use ferric::distributions::{Distribution, Normal};
+use ferric::make_model;
+
+make_model! {
+    name signal_is;
+    use ferric::distributions::Normal;
+
+    let signal : f64 ~ Normal::new(0.0, 2.0);
+    let reading : f64 ~ Normal::new(signal, 1.0);
+
+    observe reading;
+    query signal;
+}
+
+struct SignalProposer {
+    dist: Option<Normal>,
+}
+
+impl signal_is::Proposer<rand::rngs::ThreadRng> for SignalProposer {
+    fn initialize(&mut self, data: &signal_is::ObservedData) {
+        self.dist = Some(Normal::new(data.reading, 1.0).unwrap());
+    }
+
+    fn propose(&mut self, rng: &mut rand::rngs::ThreadRng) -> signal_is::Proposal {
+        let dist = self.dist.as_ref().unwrap();
+        let signal = dist.sample(rng);
+        let log_prob = <Normal as Distribution<rand::rngs::ThreadRng>>::log_prob(dist, &signal);
+        let mut proposal = signal_is::Proposal::new(log_prob);
+        proposal.signal = Some(signal);
+        proposal
+    }
+}
+```
+
 ## Indexed random variables
 
 Ferric can declare arrays of random variables by adding one or more index

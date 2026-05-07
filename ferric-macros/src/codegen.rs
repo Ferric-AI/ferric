@@ -19,6 +19,8 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
     use_stmts.push(quote! {use ferric::FeOption});
 
     let mut const_model_fields = Vec::<TokenStream>::new();
+    let mut observed_data_fields = Vec::<TokenStream>::new();
+    let mut observed_data_inits = Vec::<TokenStream>::new();
     let mut const_world_fields = Vec::<TokenStream>::new();
     let mut const_new_params = Vec::<TokenStream>::new();
     let mut const_new_inits = Vec::<TokenStream>::new();
@@ -29,6 +31,8 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         let field_ident = const_field_ident(konst);
         let ty = &konst.type_ident;
         const_model_fields.push(quote! { pub #const_ident: #ty, });
+        observed_data_fields.push(quote! { pub #const_ident: #ty, });
+        observed_data_inits.push(quote! { #const_ident: self.#const_ident.clone(), });
         const_world_fields.push(quote! { #field_ident: #ty, });
         const_new_params.push(quote! { #const_ident: #ty, });
         const_new_inits.push(quote! { #field_ident: #const_ident, });
@@ -43,6 +47,7 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
     let mut bound_log_cum_inits = Vec::<TokenStream>::new();
     let mut bound_log_cum_reset_stmts = Vec::<TokenStream>::new();
     let mut weighted_pin_stmts = Vec::<TokenStream>::new();
+    let mut importance_observed_pin_stmts = Vec::<TokenStream>::new();
     let mut eval_methods = Vec::<TokenStream>::new();
     let mut query_fields = Vec::<TokenStream>::new();
     let mut query_sample_fields = Vec::<TokenStream>::new();
@@ -53,6 +58,16 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
     let mut obs_model_args = Vec::<TokenStream>::new();
     let mut rejection_checks = Vec::<TokenStream>::new();
     let mut weighted_log_terms = Vec::<TokenStream>::new();
+    let mut importance_det_observation_checks = Vec::<TokenStream>::new();
+    let mut proposal_fields = Vec::<TokenStream>::new();
+    let mut proposal_inits = Vec::<TokenStream>::new();
+    let mut proposal_pin_stmts = Vec::<TokenStream>::new();
+    let mut proposal_prior_log_terms = Vec::<TokenStream>::new();
+    let mut trace_proposal_fields = Vec::<TokenStream>::new();
+    let mut trace_sample_fields = Vec::<TokenStream>::new();
+    let mut trace_proposal_prior_log_terms = Vec::<TokenStream>::new();
+    let mut trace_observed_log_terms = Vec::<TokenStream>::new();
+    let mut trace_det_observation_checks = Vec::<TokenStream>::new();
 
     // process all the variables in the model
     for variable in ir.variables.values() {
@@ -83,10 +98,37 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
             &ir.consts,
         ));
 
+        if variable.is_stochastic {
+            trace_sample_fields.push(trace_sample_field(variable));
+        }
+
         if variable.is_queried {
             let query_ident = &variable.var_ident;
             query_fields.push(quote! { pub #query_ident: #value_type, });
             query_sample_fields.push(quote! { #query_ident: self.#eval_var(), });
+        }
+
+        if variable.is_stochastic && !variable.is_observed {
+            let proposal_ident = &variable.var_ident;
+            let proposal_type = proposal_type(&variable.type_ident, variable.indices.len());
+            proposal_fields.push(quote! { pub #proposal_ident: #proposal_type, });
+            if variable.indices.is_empty() {
+                proposal_inits.push(quote! { #proposal_ident: None, });
+            } else {
+                proposal_inits.push(quote! { #proposal_ident: Vec::new(), });
+            }
+            proposal_pin_stmts.push(proposal_pin_stmt(variable, &ir.variables, &ir.consts));
+            proposal_prior_log_terms.push(proposal_prior_log_term(
+                variable,
+                &ir.variables,
+                &ir.consts,
+            ));
+            trace_proposal_fields.push(trace_proposal_field(variable));
+            trace_proposal_prior_log_terms.push(trace_proposal_prior_log_term(
+                variable,
+                &ir.variables,
+                &ir.consts,
+            ));
         }
 
         if variable.is_observed {
@@ -94,6 +136,8 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
             let obs_field = format_ident!("obs_{}", &variable.var_ident);
             let obs_type = observed_type(&variable.type_ident, variable.indices.len());
             obs_model_fields.push(quote! { pub #obs_ident: #obs_type, });
+            observed_data_fields.push(quote! { pub #obs_ident: #obs_type, });
+            observed_data_inits.push(quote! { #obs_ident: self.#obs_ident.clone(), });
             obs_world_fields.push(quote! { #obs_field: #obs_type, });
             obs_new_params.push(quote! { #obs_ident: #obs_type, });
             obs_new_inits.push(quote! { #obs_field: #obs_ident, });
@@ -131,6 +175,9 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                 weighted_pin_stmts.push(quote! {
                     self.#var_ident = FeOption::Known(self.#obs_field.clone());
                 });
+                importance_observed_pin_stmts.push(quote! {
+                    self.#var_ident = FeOption::Known(self.#obs_field.clone());
+                });
                 let bound_log_cum = if variable.max_expr.is_some() {
                     let eval_bound = bound_log_cum_eval_ident(variable);
                     quote! { let bound_log_cum = self.#eval_bound(); }
@@ -144,11 +191,26 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                         log_weight += #log_prob_expr;
                     }
                 });
+                trace_observed_log_terms.push(trace_scalar_observed_log_term(
+                    variable,
+                    &ir.variables,
+                    &ir.consts,
+                ));
             } else if variable.is_stochastic {
                 reset_for_weighted_stmts.push(quote! {
                     self.#var_ident = FeOption::Unknown;
                 });
+                importance_observed_pin_stmts.push(indexed_observed_pin_stmt(
+                    variable,
+                    &ir.variables,
+                    &ir.consts,
+                ));
                 weighted_log_terms.push(array_weighted_log_term(
+                    variable,
+                    &ir.variables,
+                    &ir.consts,
+                ));
+                trace_observed_log_terms.push(trace_array_observed_log_term(
                     variable,
                     &ir.variables,
                     &ir.consts,
@@ -159,6 +221,26 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                 reset_for_weighted_stmts.push(quote! {
                     self.#var_ident = FeOption::Unknown;
                 });
+                if variable.indices.is_empty() {
+                    importance_det_observation_checks.push(quote! {
+                        {
+                            let sampled = self.#eval_var();
+                            if self.#obs_field != sampled {
+                                log_weight = f64::NEG_INFINITY;
+                            }
+                        }
+                    });
+                } else {
+                    importance_det_observation_checks.push(quote! {
+                        {
+                            let sampled = self.#eval_var();
+                            if !ferric::MaskedEq::masked_eq(&self.#obs_field, &sampled) {
+                                log_weight = f64::NEG_INFINITY;
+                            }
+                        }
+                    });
+                }
+                trace_det_observation_checks.push(trace_det_observation_check(variable));
             }
         } else {
             reset_for_weighted_stmts.push(quote! {
@@ -175,8 +257,27 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         .values()
         .any(|v| v.is_observed && !v.is_stochastic);
 
-    let weighted_structs = if !has_det_observed {
+    let weighted_world_structs = if !has_det_observed {
         quote! {
+            /// Iterator adaptor over [`World`] that yields [`WeightedSample`]s
+            /// from self-normalised importance sampling.
+            ///
+            /// Obtain one via [`Model::weighted_sample_iter`].
+            pub struct WeightedWorld<R>(World<R>);
+
+            impl<R: rand::Rng> Iterator for WeightedWorld<R> {
+                type Item = WeightedSample;
+
+                fn next(&mut self) -> Option<Self::Item> {
+                    Some(self.0.weighted_sample())
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let weighted_structs = quote! {
             /// A sample returned by self-normalised importance sampling via
             /// [`Model::weighted_sample_iter`].
             ///
@@ -202,22 +303,73 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                 pub sample: Sample,
             }
 
-            /// Iterator adaptor over [`World`] that yields [`WeightedSample`]s
-            /// from self-normalised importance sampling.
+            /// Constants and observed values available to an importance
+            /// proposer during initialization.
             ///
-            /// Obtain one via [`Model::weighted_sample_iter`].
-            pub struct WeightedWorld<R>(World<R>);
+            /// This generated struct lets proposal code depend on the model
+            /// inputs without carrying an ad hoc copy of the observations.
+            pub struct ObservedData {
+                #(#observed_data_fields)*
+            }
 
-            impl<R: rand::Rng> Iterator for WeightedWorld<R> {
+            #weighted_world_structs
+
+            /// A user-supplied proposal for latent stochastic variables.
+            ///
+            /// `log_prob` is the proposal log-density/log-probability for all
+            /// values supplied in this proposal.  Fields left as `None` (or
+            /// omitted from indexed vectors) are drawn from the model prior.
+            pub struct Proposal {
+                pub log_prob: f64,
+                #(#proposal_fields)*
+            }
+
+            impl Proposal {
+                pub fn new(log_prob: f64) -> Proposal {
+                    Proposal {
+                        log_prob,
+                        #(#proposal_inits)*
+                    }
+                }
+            }
+
+            /// Trait implemented by model-specific importance proposers.
+            pub trait Proposer<R: rand::Rng> {
+                /// Prepare the proposer from model constants and observations.
+                fn initialize(&mut self, data: &ObservedData);
+
+                /// Draw one proposal.  The returned `log_prob` must be the
+                /// joint log probability of all proposed values under the
+                /// proposal distribution.
+                fn propose(&mut self, rng: &mut R) -> Proposal;
+            }
+
+            /// Iterator adaptor over [`World`] that yields [`WeightedSample`]s
+            /// from user-proposal importance sampling.
+            pub struct ImportanceWorld<R, P> {
+                world: World<R>,
+                proposer: P,
+                trace_remaining: usize,
+                trace_index: usize,
+            }
+
+            impl<R: rand::Rng, P: Proposer<R>> Iterator for ImportanceWorld<R, P> {
                 type Item = WeightedSample;
 
                 fn next(&mut self) -> Option<Self::Item> {
-                    Some(self.0.weighted_sample())
+                    if self.trace_remaining > 0 {
+                        let sample = self.world.importance_sample_debug(
+                            &mut self.proposer,
+                            self.trace_index,
+                        );
+                        self.trace_remaining -= 1;
+                        self.trace_index += 1;
+                        Some(sample)
+                    } else {
+                        Some(self.world.importance_sample(&mut self.proposer))
+                    }
                 }
             }
-        }
-    } else {
-        quote! {}
     };
 
     let weighted_sample_iter_method = if !has_det_observed {
@@ -254,6 +406,77 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         quote! {}
     };
 
+    let importance_sample_iter_method = quote! {
+        /// Returns an iterator of importance-weighted samples using a
+        /// user-supplied proposal distribution.
+        pub fn importance_sample_iter<P>(&self, mut proposer: P) -> ImportanceWorld<rand::rngs::ThreadRng, P>
+        where
+            P: Proposer<rand::rngs::ThreadRng>,
+        {
+            let observed_data = self.observed_data();
+            proposer.initialize(&observed_data);
+            ImportanceWorld {
+                world: World::new(
+                    rand::thread_rng(),
+                    #(#const_model_args)*
+                    #(#obs_model_args)*
+                ),
+                proposer,
+                trace_remaining: 0,
+                trace_index: 0,
+            }
+        }
+
+        /// Alias for [`Model::importance_sample_iter`].
+        pub fn importance_sampler<P>(&self, proposer: P) -> ImportanceWorld<rand::rngs::ThreadRng, P>
+        where
+            P: Proposer<rand::rngs::ThreadRng>,
+        {
+            self.importance_sample_iter(proposer)
+        }
+
+        /// Returns an importance-sampling iterator that prints a detailed
+        /// trace for the first `samples_to_trace` worlds.
+        ///
+        /// The trace includes the full proposal object, the model-prior
+        /// log-probability terms for proposed values, observed likelihood
+        /// terms, sampled stochastic values, and final log weight.  After the
+        /// traced prefix, the iterator continues without printing.
+        pub fn importance_sample_iter_debug<P>(
+            &self,
+            mut proposer: P,
+            samples_to_trace: usize,
+        ) -> ImportanceWorld<rand::rngs::ThreadRng, P>
+        where
+            P: Proposer<rand::rngs::ThreadRng>,
+        {
+            let observed_data = self.observed_data();
+            proposer.initialize(&observed_data);
+            ImportanceWorld {
+                world: World::new(
+                    rand::thread_rng(),
+                    #(#const_model_args)*
+                    #(#obs_model_args)*
+                ),
+                proposer,
+                trace_remaining: samples_to_trace,
+                trace_index: 0,
+            }
+        }
+
+        /// Alias for [`Model::importance_sample_iter_debug`].
+        pub fn importance_sampler_debug<P>(
+            &self,
+            proposer: P,
+            samples_to_trace: usize,
+        ) -> ImportanceWorld<rand::rngs::ThreadRng, P>
+        where
+            P: Proposer<rand::rngs::ThreadRng>,
+        {
+            self.importance_sample_iter_debug(proposer, samples_to_trace)
+        }
+    };
+
     let weighted_sample_method = if !has_det_observed {
         quote! {
             /// Draw one importance-weighted sample via self-normalised
@@ -281,6 +504,74 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         }
     } else {
         quote! {}
+    };
+
+    let importance_sample_method = quote! {
+        /// Draw one importance-weighted sample from a user-supplied
+        /// proposal distribution.
+        pub fn importance_sample<P>(&mut self, proposer: &mut P) -> WeightedSample
+        where
+            P: Proposer<R>,
+        {
+            self.reset_for_importance();
+            let proposal = proposer.propose(&mut self.rng);
+            self.apply_proposal(&proposal);
+            #(#importance_observed_pin_stmts)*
+
+            let mut log_weight = -proposal.log_prob;
+            #(#proposal_prior_log_terms)*
+            #(#weighted_log_terms)*
+            #(#importance_det_observation_checks)*
+            WeightedSample {
+                log_weight,
+                sample: Sample {
+                    #(#query_sample_fields)*
+                },
+            }
+        }
+
+        /// Draw one importance-weighted sample and print the terms that form
+        /// its importance weight.  This is intended for diagnostics; prefer
+        /// [`World::importance_sample`] for normal sampling.
+        pub fn importance_sample_debug<P>(
+            &mut self,
+            proposer: &mut P,
+            trace_index: usize,
+        ) -> WeightedSample
+        where
+            P: Proposer<R>,
+        {
+            self.reset_for_importance();
+            let proposal = proposer.propose(&mut self.rng);
+            println!("Ferric importance sample trace #{}", trace_index);
+            println!("proposal:");
+            println!("  log_prob = {:.12}", proposal.log_prob);
+            #(#trace_proposal_fields)*
+            self.apply_proposal(&proposal);
+            #(#importance_observed_pin_stmts)*
+
+            let mut log_weight = -proposal.log_prob;
+            let mut model_prior_log_prob = 0.0f64;
+            let mut observed_log_prob = 0.0f64;
+            println!("model prior terms for proposed values:");
+            #(#trace_proposal_prior_log_terms)*
+            println!("model prior log_prob total = {:.12}", model_prior_log_prob);
+            println!("observed likelihood terms:");
+            #(#trace_observed_log_terms)*
+            #(#trace_det_observation_checks)*
+            println!("observed likelihood log_prob total = {:.12}", observed_log_prob);
+            println!("sampled stochastic values:");
+            #(#trace_sample_fields)*
+            println!("proposal correction -log q = {:.12}", -proposal.log_prob);
+            println!("final log_weight = {:.12}", log_weight);
+            println!();
+            WeightedSample {
+                log_weight,
+                sample: Sample {
+                    #(#query_sample_fields)*
+                },
+            }
+        }
     };
 
     let active_eval_method = active_eval_method_for(&ir.variables);
@@ -330,7 +621,16 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                     )
                 }
 
+                /// Returns the generated constants-and-observations struct
+                /// passed to user-defined importance proposers.
+                pub fn observed_data(&self) -> ObservedData {
+                    ObservedData {
+                        #(#observed_data_inits)*
+                    }
+                }
+
                 #weighted_sample_iter_method
+                #importance_sample_iter_method
             }
 
             pub struct World<R> {
@@ -377,6 +677,12 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                     #(#weighted_pin_stmts)*
                 }
 
+                /// Resets the world before user-proposal importance sampling.
+                fn reset_for_importance(&mut self) {
+                    #(#reset_for_weighted_stmts)*
+                    #(#bound_log_cum_reset_stmts)*
+                }
+
                 /// Draw one exact posterior sample via rejection sampling.
                 ///
                 /// Loops until a prior draw matches every observed value, then
@@ -393,6 +699,11 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
                 }
 
                 #weighted_sample_method
+                #importance_sample_method
+
+                fn apply_proposal(&mut self, proposal: &Proposal) {
+                    #(#proposal_pin_stmts)*
+                }
 
                 #active_eval_method
 
@@ -419,6 +730,14 @@ fn observed_type(base: &Type, dims: usize) -> TokenStream {
             ty = quote! { Vec<#ty> };
         }
         ty
+    }
+}
+
+fn proposal_type(base: &Type, dims: usize) -> TokenStream {
+    if dims == 0 {
+        quote! { Option<#base> }
+    } else {
+        observed_type(base, dims)
     }
 }
 
@@ -456,6 +775,581 @@ fn obs_item_ident(level: usize) -> Ident {
 
 fn bound_log_cum_field_ident(variable: &VariableIR) -> Ident {
     format_ident!("bound_log_cum_{}", variable.var_ident)
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn proposal_pin_stmt(
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+) -> TokenStream {
+    let var_ident = format_ident!("var_{}", variable.var_ident);
+    let proposal_ident = &variable.var_ident;
+
+    if variable.indices.is_empty() {
+        return quote! {
+            if let Some(__ferric_proposed_value) = proposal.#proposal_ident.as_ref() {
+                self.#var_ident = FeOption::Known(__ferric_proposed_value.clone());
+            }
+        };
+    }
+
+    let init_cache = cache_initializer_for_variable(variable, variables, consts);
+    let loops = proposal_pin_loop(0, variable, quote! { &proposal.#proposal_ident });
+    quote! {
+        if !proposal.#proposal_ident.is_empty() {
+            if self.#var_ident.is_unknown() {
+                let cache = #init_cache;
+                self.#var_ident = FeOption::Known(cache);
+            }
+            {
+                let cache = match &mut self.#var_ident {
+                    FeOption::Known(cache) => cache,
+                    FeOption::Null => unreachable!("indexed variables use per-cell breadcrumbs"),
+                    FeOption::Unknown => unreachable!("indexed cache was initialized above"),
+                };
+                #loops
+            }
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn proposal_pin_loop(
+    level: usize,
+    variable: &VariableIR,
+    proposal_ref: TokenStream,
+) -> TokenStream {
+    if level == variable.indices.len() {
+        let access = indexed_access(quote! { cache }, variable);
+        return quote! {
+            if let Some(__ferric_proposed_value) = (#proposal_ref).as_ref() {
+                #access = FeOption::Known(__ferric_proposed_value.clone());
+            }
+        };
+    }
+
+    let zero_idx = loop_ident(level);
+    let idx = index_ident(variable, level);
+    let item = format_ident!("__ferric_proposal_item_{}", level);
+    let inner = proposal_pin_loop(level + 1, variable, quote! { #item });
+    quote! {
+        for (#zero_idx, #item) in (#proposal_ref).iter().enumerate() {
+            let #idx = #zero_idx as u64;
+            let _ = #idx;
+            #inner
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn trace_proposal_field(variable: &VariableIR) -> TokenStream {
+    let proposal_ident = &variable.var_ident;
+    let label = variable.var_ident.to_string();
+    quote! {
+        println!("  {} = {:?}", #label, &proposal.#proposal_ident);
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn trace_sample_field(variable: &VariableIR) -> TokenStream {
+    let eval_var = format_ident!("eval_{}", variable.var_ident);
+    let label = variable.var_ident.to_string();
+    quote! {
+        println!("  {} = {:?}", #label, self.#eval_var());
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn indexed_observed_pin_stmt(
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+) -> TokenStream {
+    let var_ident = format_ident!("var_{}", variable.var_ident);
+    let obs_field = format_ident!("obs_{}", variable.var_ident);
+    let init_cache = cache_initializer_for_variable(variable, variables, consts);
+    let loops = indexed_observed_pin_loop(0, variable, quote! { &self.#obs_field });
+    quote! {
+        {
+            if self.#var_ident.is_unknown() {
+                let cache = #init_cache;
+                self.#var_ident = FeOption::Known(cache);
+            }
+            let cache = match &mut self.#var_ident {
+                FeOption::Known(cache) => cache,
+                FeOption::Null => unreachable!("indexed variables use per-cell breadcrumbs"),
+                FeOption::Unknown => unreachable!("indexed cache was initialized above"),
+            };
+            #loops
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn indexed_observed_pin_loop(
+    level: usize,
+    variable: &VariableIR,
+    obs_ref: TokenStream,
+) -> TokenStream {
+    if level == variable.indices.len() {
+        let access = indexed_access(quote! { cache }, variable);
+        return quote! {
+            if let Some(__ferric_observed_value) = (#obs_ref).as_ref() {
+                #access = FeOption::Known(__ferric_observed_value.clone());
+            }
+        };
+    }
+
+    let zero_idx = loop_ident(level);
+    let idx = index_ident(variable, level);
+    let item = obs_item_ident(level);
+    let inner = indexed_observed_pin_loop(level + 1, variable, quote! { #item });
+    quote! {
+        for (#zero_idx, #item) in (#obs_ref).iter().enumerate() {
+            let #idx = #zero_idx as u64;
+            let _ = #idx;
+            #inner
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn trace_scalar_observed_log_term(
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+) -> TokenStream {
+    let eval_dist_var = format_ident!("evaldist_{}", &variable.var_ident);
+    let obs_field = format_ident!("obs_{}", &variable.var_ident);
+    let label = variable.var_ident.to_string();
+    let bound_log_cum = if variable.max_expr.is_some() {
+        let eval_bound = bound_log_cum_eval_ident(variable);
+        quote! { let bound_log_cum = self.#eval_bound(); }
+    } else {
+        quote! {}
+    };
+    let log_prob_expr = weighted_log_prob_expr(
+        quote! { dist },
+        quote! { &self.#obs_field },
+        variable,
+        variables,
+        consts,
+        Some(quote! { bound_log_cum }),
+    );
+    quote! {
+        {
+            let dist = self.#eval_dist_var();
+            #bound_log_cum
+            let __ferric_term = #log_prob_expr;
+            log_weight += __ferric_term;
+            observed_log_prob += __ferric_term;
+            println!(
+                "  likelihood {} observed {:?}: log_prob = {:.12}",
+                #label,
+                &self.#obs_field,
+                __ferric_term
+            );
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn trace_array_observed_log_term(
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+) -> TokenStream {
+    let obs_field = format_ident!("obs_{}", variable.var_ident);
+    let obs_local = format_ident!("__ferric_trace_obs_{}", variable.var_ident);
+    let bound_log_cum_local = format_ident!("__ferric_trace_bound_log_cum_{}", variable.var_ident);
+    let bound_log_cum_prelude = if variable.max_expr.is_some() {
+        let eval_bound = bound_log_cum_eval_ident(variable);
+        quote! { let #bound_log_cum_local = self.#eval_bound(); }
+    } else {
+        quote! {}
+    };
+    let bound_log_cum_ref = variable
+        .max_expr
+        .as_ref()
+        .map(|_| quote! { #bound_log_cum_local });
+    let body = trace_array_observed_log_loop(
+        0,
+        variable,
+        variables,
+        consts,
+        quote! { &#obs_local },
+        bound_log_cum_ref,
+    );
+    quote! {
+        {
+            let #obs_local = self.#obs_field.clone();
+            #bound_log_cum_prelude
+            #body
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn trace_array_observed_log_loop(
+    level: usize,
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+    obs_ref: TokenStream,
+    bound_log_cum_ref: Option<TokenStream>,
+) -> TokenStream {
+    if level == variable.indices.len() {
+        let eval_dist = format_ident!("evaldist_{}", variable.var_ident);
+        let idx_args = index_idents(variable);
+        let label = variable.var_ident.to_string();
+        let bound_log_cum = bound_log_cum_ref
+            .map(|log_cum| indexed_access(log_cum, variable))
+            .or_else(|| Some(quote! { 0.0 }));
+        let log_prob_expr = weighted_log_prob_expr(
+            quote! { dist },
+            quote! { __ferric_observed_value },
+            variable,
+            variables,
+            consts,
+            bound_log_cum,
+        );
+        return quote! {
+            if let Some(__ferric_observed_value) = (#obs_ref).as_ref() {
+                let dist = self.#eval_dist(#(#idx_args),*);
+                let __ferric_term = #log_prob_expr;
+                log_weight += __ferric_term;
+                observed_log_prob += __ferric_term;
+                let __ferric_indices = vec![#(#idx_args.to_string()),*].join(", ");
+                println!(
+                    "  likelihood {}[{}] observed {:?}: log_prob = {:.12}",
+                    #label,
+                    __ferric_indices,
+                    __ferric_observed_value,
+                    __ferric_term
+                );
+            }
+        };
+    }
+
+    let zero_idx = loop_ident(level);
+    let idx = index_ident(variable, level);
+    let item = obs_item_ident(level);
+    let bound = bound_expr(&variable.indices[level].upper_ident, variables, consts);
+    let inner = trace_array_observed_log_loop(
+        level + 1,
+        variable,
+        variables,
+        consts,
+        quote! { #item },
+        bound_log_cum_ref,
+    );
+    quote! {
+        for (#zero_idx, #item) in (#obs_ref).iter().enumerate() {
+            let #idx = #zero_idx as u64;
+            let _ = #idx;
+            if #idx >= #bound {
+                break;
+            }
+            #inner
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn trace_det_observation_check(variable: &VariableIR) -> TokenStream {
+    let eval_var = format_ident!("eval_{}", variable.var_ident);
+    let obs_field = format_ident!("obs_{}", variable.var_ident);
+    let label = variable.var_ident.to_string();
+    if variable.indices.is_empty() {
+        quote! {
+            {
+                let sampled = self.#eval_var();
+                let matched = self.#obs_field == sampled;
+                println!(
+                    "  deterministic {} observed {:?}, evaluated {:?}: matched = {}",
+                    #label,
+                    &self.#obs_field,
+                    &sampled,
+                    matched
+                );
+                if !matched {
+                    log_weight = f64::NEG_INFINITY;
+                }
+            }
+        }
+    } else {
+        quote! {
+            {
+                let sampled = self.#eval_var();
+                let matched = ferric::MaskedEq::masked_eq(&self.#obs_field, &sampled);
+                println!(
+                    "  deterministic {} observed {:?}, evaluated {:?}: matched = {}",
+                    #label,
+                    &self.#obs_field,
+                    &sampled,
+                    matched
+                );
+                if !matched {
+                    log_weight = f64::NEG_INFINITY;
+                }
+            }
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn proposal_prior_log_term(
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+) -> TokenStream {
+    let proposal_ident = &variable.var_ident;
+    if variable.indices.is_empty() {
+        let eval_dist = format_ident!("evaldist_{}", variable.var_ident);
+        let bound_log_cum = if variable.max_expr.is_some() {
+            let eval_bound = bound_log_cum_eval_ident(variable);
+            quote! { let bound_log_cum = self.#eval_bound(); }
+        } else {
+            quote! {}
+        };
+        let bound_ref = variable.max_expr.as_ref().map(|_| quote! { bound_log_cum });
+        let log_prob_expr = weighted_log_prob_expr_with_scoped(
+            quote! { dist },
+            quote! { __ferric_proposed_value },
+            variable,
+            variables,
+            consts,
+            &[],
+            bound_ref,
+        );
+        return quote! {
+            if let Some(__ferric_proposed_value) = proposal.#proposal_ident.as_ref() {
+                let dist = self.#eval_dist();
+                #bound_log_cum
+                log_weight += #log_prob_expr;
+            }
+        };
+    }
+
+    let bound_log_cum_local = format_ident!("__ferric_bound_log_cum_{}", variable.var_ident);
+    let bound_log_cum_prelude = if variable.max_expr.is_some() {
+        let eval_bound = bound_log_cum_eval_ident(variable);
+        quote! { let #bound_log_cum_local = self.#eval_bound(); }
+    } else {
+        quote! {}
+    };
+    let bound_log_cum_ref = variable
+        .max_expr
+        .as_ref()
+        .map(|_| quote! { #bound_log_cum_local });
+    let body = proposal_prior_log_loop(
+        0,
+        variable,
+        variables,
+        consts,
+        quote! { &proposal.#proposal_ident },
+        bound_log_cum_ref,
+    );
+    quote! {
+        {
+            #bound_log_cum_prelude
+            #body
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn proposal_prior_log_loop(
+    level: usize,
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+    proposal_ref: TokenStream,
+    bound_log_cum_ref: Option<TokenStream>,
+) -> TokenStream {
+    if level == variable.indices.len() {
+        let eval_dist = format_ident!("evaldist_{}", variable.var_ident);
+        let idx_args = index_idents(variable);
+        let bound_log_cum = bound_log_cum_ref
+            .map(|log_cum| indexed_access(log_cum, variable))
+            .or_else(|| Some(quote! { 0.0 }));
+        let log_prob_expr = weighted_log_prob_expr_with_scoped(
+            quote! { dist },
+            quote! { __ferric_proposed_value },
+            variable,
+            variables,
+            consts,
+            &idx_args,
+            bound_log_cum,
+        );
+        return quote! {
+            if let Some(__ferric_proposed_value) = (#proposal_ref).as_ref() {
+                let dist = self.#eval_dist(#(#idx_args),*);
+                log_weight += #log_prob_expr;
+            }
+        };
+    }
+
+    let zero_idx = loop_ident(level);
+    let idx = index_ident(variable, level);
+    let item = format_ident!("__ferric_proposal_log_item_{}", level);
+    let bound = bound_expr(&variable.indices[level].upper_ident, variables, consts);
+    let inner = proposal_prior_log_loop(
+        level + 1,
+        variable,
+        variables,
+        consts,
+        quote! { #item },
+        bound_log_cum_ref,
+    );
+    quote! {
+        for (#zero_idx, #item) in (#proposal_ref).iter().enumerate() {
+            let #idx = #zero_idx as u64;
+            let _ = #idx;
+            if #idx >= #bound {
+                break;
+            }
+            #inner
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn trace_proposal_prior_log_term(
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+) -> TokenStream {
+    let proposal_ident = &variable.var_ident;
+    if variable.indices.is_empty() {
+        let eval_dist = format_ident!("evaldist_{}", variable.var_ident);
+        let label = variable.var_ident.to_string();
+        let bound_log_cum = if variable.max_expr.is_some() {
+            let eval_bound = bound_log_cum_eval_ident(variable);
+            quote! { let bound_log_cum = self.#eval_bound(); }
+        } else {
+            quote! {}
+        };
+        let bound_ref = variable.max_expr.as_ref().map(|_| quote! { bound_log_cum });
+        let log_prob_expr = weighted_log_prob_expr_with_scoped(
+            quote! { dist },
+            quote! { __ferric_proposed_value },
+            variable,
+            variables,
+            consts,
+            &[],
+            bound_ref,
+        );
+        return quote! {
+            if let Some(__ferric_proposed_value) = proposal.#proposal_ident.as_ref() {
+                let dist = self.#eval_dist();
+                #bound_log_cum
+                let __ferric_term = #log_prob_expr;
+                log_weight += __ferric_term;
+                model_prior_log_prob += __ferric_term;
+                println!(
+                    "  prior {} value {:?}: log_prob = {:.12}",
+                    #label,
+                    __ferric_proposed_value,
+                    __ferric_term
+                );
+            }
+        };
+    }
+
+    let bound_log_cum_local = format_ident!("__ferric_trace_bound_log_cum_{}", variable.var_ident);
+    let bound_log_cum_prelude = if variable.max_expr.is_some() {
+        let eval_bound = bound_log_cum_eval_ident(variable);
+        quote! { let #bound_log_cum_local = self.#eval_bound(); }
+    } else {
+        quote! {}
+    };
+    let bound_log_cum_ref = variable
+        .max_expr
+        .as_ref()
+        .map(|_| quote! { #bound_log_cum_local });
+    let body = trace_proposal_prior_log_loop(
+        0,
+        variable,
+        variables,
+        consts,
+        quote! { &proposal.#proposal_ident },
+        bound_log_cum_ref,
+    );
+    quote! {
+        {
+            #bound_log_cum_prelude
+            #body
+        }
+    }
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn trace_proposal_prior_log_loop(
+    level: usize,
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+    proposal_ref: TokenStream,
+    bound_log_cum_ref: Option<TokenStream>,
+) -> TokenStream {
+    if level == variable.indices.len() {
+        let eval_dist = format_ident!("evaldist_{}", variable.var_ident);
+        let idx_args = index_idents(variable);
+        let label = variable.var_ident.to_string();
+        let bound_log_cum = bound_log_cum_ref
+            .map(|log_cum| indexed_access(log_cum, variable))
+            .or_else(|| Some(quote! { 0.0 }));
+        let log_prob_expr = weighted_log_prob_expr_with_scoped(
+            quote! { dist },
+            quote! { __ferric_proposed_value },
+            variable,
+            variables,
+            consts,
+            &idx_args,
+            bound_log_cum,
+        );
+        return quote! {
+            if let Some(__ferric_proposed_value) = (#proposal_ref).as_ref() {
+                let dist = self.#eval_dist(#(#idx_args),*);
+                let __ferric_term = #log_prob_expr;
+                log_weight += __ferric_term;
+                model_prior_log_prob += __ferric_term;
+                let __ferric_indices = vec![#(#idx_args.to_string()),*].join(", ");
+                println!(
+                    "  prior {}[{}] value {:?}: log_prob = {:.12}",
+                    #label,
+                    __ferric_indices,
+                    __ferric_proposed_value,
+                    __ferric_term
+                );
+            }
+        };
+    }
+
+    let zero_idx = loop_ident(level);
+    let idx = index_ident(variable, level);
+    let item = format_ident!("__ferric_trace_proposal_log_item_{}", level);
+    let bound = bound_expr(&variable.indices[level].upper_ident, variables, consts);
+    let inner = trace_proposal_prior_log_loop(
+        level + 1,
+        variable,
+        variables,
+        consts,
+        quote! { #item },
+        bound_log_cum_ref,
+    );
+    quote! {
+        for (#zero_idx, #item) in (#proposal_ref).iter().enumerate() {
+            let #idx = #zero_idx as u64;
+            let _ = #idx;
+            if #idx >= #bound {
+                break;
+            }
+            #inner
+        }
+    }
 }
 
 fn bound_log_cum_eval_ident(variable: &VariableIR) -> Ident {
@@ -1048,8 +1942,29 @@ fn weighted_log_prob_expr(
     consts: &HashMap<String, ConstantIR>,
     bound_log_cum: Option<TokenStream>,
 ) -> TokenStream {
+    weighted_log_prob_expr_with_scoped(
+        dist,
+        observed,
+        variable,
+        variables,
+        consts,
+        &[],
+        bound_log_cum,
+    )
+}
+
+#[cfg_attr(coverage_nightly, coverage(off))]
+fn weighted_log_prob_expr_with_scoped(
+    dist: TokenStream,
+    observed: TokenStream,
+    variable: &VariableIR,
+    variables: &HashMap<String, VariableIR>,
+    consts: &HashMap<String, ConstantIR>,
+    scoped_indices: &[Ident],
+    bound_log_cum: Option<TokenStream>,
+) -> TokenStream {
     if let Some(max_expr) = &variable.max_expr {
-        let max_expr = replace(quote! { #max_expr }, variables, consts, &[]);
+        let max_expr = replace(quote! { #max_expr }, variables, consts, scoped_indices);
         let bound_log_cum = bound_log_cum.expect("bounded variables need cached log CDF");
         quote! {
             {

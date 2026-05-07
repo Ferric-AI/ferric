@@ -133,6 +133,23 @@
 //! assert!((0.0..=1.0).contains(&posterior_mean));
 //! ```
 //!
+//! User-proposal importance sampling is available through
+//! `importance_sampler(proposer)`. Each generated model module includes an
+//! `ObservedData` struct, a `Proposal` struct, and a `Proposer<R>` trait. Ferric
+//! calls `Proposer::initialize(&ObservedData)` once before sampling so the
+//! proposer can build proposal distributions from constants and observations.
+//! Each call to `Proposer::propose` returns proposed latent stochastic values
+//! and their joint proposal `log_prob`; omitted proposal fields are sampled
+//! from the model prior. Ferric then computes
+//! `log p_model(proposed values) - log q(proposed values)` and adds the usual
+//! observation log likelihoods. For diagnostics, generated models also provide
+//! `importance_sampler_debug(proposer, n)`, which prints the proposal, prior
+//! terms for proposed values, observed likelihood terms, sampled stochastic
+//! values, and final log weight for the first `n` worlds. The rats example
+//! wires this to `FERRIC_DEBUG_IMPORTANCE`; for example,
+//! `FERRIC_DEBUG_IMPORTANCE=1 cargo run -p ferric --example rats` traces the
+//! first importance sample in each rats experiment.
+//!
 //! # Indexed Random Variables
 //!
 //! Ferric supports one or more dimensions of indexed random variables. Each
