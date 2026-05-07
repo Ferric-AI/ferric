@@ -55,6 +55,7 @@ fn scalar_importance_sampler_uses_user_proposal() {
 
     let post_mean = ferric::weighted_mean(&values, &log_weights);
     let post_std = ferric::weighted_std(&values, &log_weights);
+    let effective_sample_size = ferric::effective_sample_size(&log_weights);
 
     // A ~ N(0, 1), B | A ~ N(5A, 3^2), observed B = 20.
     // Gaussian conditioning gives:
@@ -71,4 +72,6 @@ fn scalar_importance_sampler_uses_user_proposal() {
         (post_std - expected_std).abs() < 0.08,
         "posterior std {post_std} not close to {expected_std}"
     );
+    assert!(effective_sample_size > 1.0);
+    assert!(effective_sample_size <= num_samples as f64);
 }

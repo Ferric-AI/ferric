@@ -130,7 +130,9 @@
 //!     weights.push(sample.log_weight);
 //! }
 //! let posterior_mean = weighted_mean(&values, &weights);
+//! let ess = ferric::effective_sample_size(&weights);
 //! assert!((0.0..=1.0).contains(&posterior_mean));
+//! assert!(ess > 0.0);
 //! ```
 //!
 //! User-proposal importance sampling is available through
@@ -145,8 +147,10 @@
 //! observation log likelihoods. For diagnostics, generated models also provide
 //! `importance_sampler_debug(proposer, n)`, which prints the proposal, prior
 //! terms for proposed values, observed likelihood terms, sampled stochastic
-//! values, and final log weight for the first `n` worlds. The rats example
-//! wires this to `FERRIC_DEBUG_IMPORTANCE`; for example,
+//! values, and final log weight for the first `n` worlds. Use
+//! [`effective_sample_size`] on the collected log weights to monitor weight
+//! degeneracy. The rats example wires debugging to `FERRIC_DEBUG_IMPORTANCE`;
+//! for example,
 //! `FERRIC_DEBUG_IMPORTANCE=1 cargo run -p ferric --example rats` traces the
 //! first importance sample in each rats experiment.
 //!
@@ -384,6 +388,69 @@ pub fn weighted_std(values: &[f64], log_weights: &[f64]) -> f64 {
     variance.sqrt()
 }
 
+/// Compute the effective sample size (ESS) of unnormalised log weights.
+///
+/// This returns
+///
+/// $$\mathrm{ESS} = \frac{(\sum_i w_i)^2}{\sum_i w_i^2},
+///   \qquad w_i = e^{\tilde{w}_i - \max_j \tilde{w}_j}$$
+///
+/// The max-subtraction keeps the arithmetic numerically stable and does not
+/// change the result.  Uniform weights therefore have ESS equal to the number
+/// of samples, while a single dominant weight gives ESS close to 1.
+///
+/// Empty inputs, or inputs where every log weight is `f64::NEG_INFINITY`,
+/// return 0.0.
+///
+/// # Examples
+///
+/// ```
+/// use ferric::effective_sample_size;
+///
+/// let log_weights = vec![0.0_f64; 4];
+/// assert!((effective_sample_size(&log_weights) - 4.0).abs() < 1e-10);
+/// ```
+pub fn effective_sample_size(log_weights: &[f64]) -> f64 {
+    if log_weights.is_empty() {
+        return 0.0;
+    }
+
+    if log_weights.iter().any(|log_weight| log_weight.is_nan()) {
+        return f64::NAN;
+    }
+
+    let max_lw = log_weights
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    if max_lw == f64::NEG_INFINITY {
+        return 0.0;
+    }
+
+    if max_lw == f64::INFINITY {
+        let infinite_weights = log_weights
+            .iter()
+            .filter(|&&log_weight| log_weight == f64::INFINITY)
+            .count();
+        return infinite_weights as f64;
+    }
+
+    let mut sum_weight = 0.0;
+    let mut sum_weight_squared = 0.0;
+    for &log_weight in log_weights {
+        let weight = (log_weight - max_lw).exp();
+        sum_weight += weight;
+        sum_weight_squared += weight * weight;
+    }
+
+    if sum_weight_squared == 0.0 {
+        0.0
+    } else {
+        sum_weight * sum_weight / sum_weight_squared
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,5 +496,31 @@ mod tests {
         let log_weights = vec![-100.0, -100.0, 0.0];
         let mean = weighted_mean(&values, &log_weights);
         assert!((mean - 10.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn effective_sample_size_uniform() {
+        let log_weights = vec![0.0, 0.0, 0.0, 0.0];
+        assert!((effective_sample_size(&log_weights) - 4.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn effective_sample_size_concentrated() {
+        let log_weights = vec![-100.0, -100.0, 0.0];
+        assert!((effective_sample_size(&log_weights) - 1.0).abs() < 1e-8);
+    }
+
+    #[test]
+    fn effective_sample_size_empty_or_zero_weight() {
+        assert_eq!(effective_sample_size(&[]), 0.0);
+        assert_eq!(
+            effective_sample_size(&[f64::NEG_INFINITY, f64::NEG_INFINITY]),
+            0.0
+        );
+    }
+
+    #[test]
+    fn effective_sample_size_nan_stays_nan() {
+        assert!(effective_sample_size(&[0.0, f64::NAN]).is_nan());
     }
 }

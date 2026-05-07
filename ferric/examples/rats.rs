@@ -17,17 +17,12 @@
 // - initialize() copies the available observations for each rat.  It does not
 //   use values removed by the missing-data experiment.
 // - propose() handles every rat with at least two observed weights.  For each
-//   such rat it picks one observed pair uniformly, solves the line through that
-//   pair, and measures that line's residual variance on all observed weights
-//   for the rat.
-// - If the residual variance is nondegenerate, the proposer adds independent
-//   Normal noise to that rat's alpha[rat] and beta[rat], using half the
-//   residual variance as the noise variance.  If the variance is tiny, the
-//   pair-implied alpha/beta are used exactly.
-// - The proposed per-rat alpha/beta values then deterministically define
-//   alpha_c, alpha_tau, beta_c, and beta_tau.  tau_c is also deterministic: it
-//   is the precision corresponding to the residual standard deviation of
-//   observed weights around the proposed per-rat lines.
+//   such rat it picks one observed pair uniformly and solves the line through
+//   that pair.  The pair probability is the only per-rat proposal term.
+// - The proposed per-rat alpha/beta values then inform conjugate conditional
+//   proposals for alpha_c/alpha_tau and beta_c/beta_tau.  tau_c is sampled
+//   from its conjugate Gamma conditional posterior given the observed weights
+//   and the proposed per-rat means.
 // - Each experiment initializes its proposer from only the observations
 //   available in that experiment.  The missing-data run does not peek at the
 //   values removed by `missing_weights`.
@@ -35,7 +30,7 @@
 //   importance samples in each experiment:
 //     FERRIC_DEBUG_IMPORTANCE=1 cargo run -p ferric --example rats
 
-use ferric::distributions::{Distribution, Normal};
+use ferric::distributions::{Distribution, Gamma, Normal};
 use ferric::make_model;
 use rand::Rng;
 
@@ -160,27 +155,13 @@ struct RatsProposer {
     rats: Vec<Vec<(f64, f64)>>,
 }
 
-const MIN_PROPOSAL_STD_DEV: f64 = 1.0e-9;
-const MIN_NOISE_VARIANCE: f64 = 1.0e-9;
+const PRECISION_PRIOR_SHAPE: f64 = 0.001;
+const PRECISION_PRIOR_SCALE: f64 = 1000.0;
+const POPULATION_MEAN_PRIOR_MEAN: f64 = 0.0;
+const POPULATION_MEAN_PRIOR_STD_DEV: f64 = 1000.0;
 
 fn mean(xs: &[f64]) -> f64 {
     xs.iter().sum::<f64>() / xs.len() as f64
-}
-
-fn std_dev(xs: &[f64], center: f64) -> f64 {
-    let var = xs
-        .iter()
-        .map(|x| {
-            let dx = x - center;
-            dx * dx
-        })
-        .sum::<f64>()
-        / (xs.len().saturating_sub(1).max(1) as f64);
-    var.sqrt()
-}
-
-fn precision_from_std_dev(std_dev: f64) -> f64 {
-    1.0 / std_dev.max(MIN_PROPOSAL_STD_DEV).powi(2)
 }
 
 fn pair_count(n: usize) -> usize {
@@ -218,6 +199,47 @@ fn sample_normal(
     x
 }
 
+fn sample_gamma(
+    rng: &mut rand::rngs::ThreadRng,
+    shape: f64,
+    scale: f64,
+    log_prob: &mut f64,
+) -> f64 {
+    let dist = Gamma::new(shape, scale).unwrap();
+    let x = dist.sample(rng);
+    *log_prob += <Gamma as Distribution<rand::rngs::ThreadRng>>::log_prob(&dist, &x);
+    x
+}
+
+fn sample_population_parameters(
+    rng: &mut rand::rngs::ThreadRng,
+    values: &[f64],
+    log_prob: &mut f64,
+) -> (f64, f64) {
+    let center = mean(values);
+    let precision_shape = PRECISION_PRIOR_SHAPE + 0.5 * values.len() as f64;
+    let precision_rate = 1.0 / PRECISION_PRIOR_SCALE
+        + 0.5
+            * values
+                .iter()
+                .map(|value| {
+                    let residual = value - center;
+                    residual * residual
+                })
+                .sum::<f64>();
+    let precision = sample_gamma(rng, precision_shape, 1.0 / precision_rate, log_prob);
+
+    let prior_precision = 1.0 / POPULATION_MEAN_PRIOR_STD_DEV.powi(2);
+    let posterior_precision = prior_precision + values.len() as f64 * precision;
+    let posterior_mean = (POPULATION_MEAN_PRIOR_MEAN * prior_precision
+        + precision * values.iter().sum::<f64>())
+        / posterior_precision;
+    let posterior_std_dev = precision_to_std_dev(posterior_precision);
+    let population_mean = sample_normal(rng, posterior_mean, posterior_std_dev, log_prob);
+
+    (population_mean, precision)
+}
+
 impl rats::Proposer<rand::rngs::ThreadRng> for RatsProposer {
     fn initialize(&mut self, data: &rats::ObservedData) {
         let xs = (0..data.num_times)
@@ -246,10 +268,13 @@ impl rats::Proposer<rand::rngs::ThreadRng> for RatsProposer {
             self.rats.len()
         );
         println!(
-            "  per eligible rat: choose one observed pair uniformly, solve alpha/beta, then add residual-variance noise when nondegenerate"
+            "  per eligible rat: choose one observed pair uniformly and solve alpha/beta exactly"
         );
         println!(
-            "  alpha_c, alpha_tau, beta_c, beta_tau, and tau_c are deterministic functions of the proposed rat-level values"
+            "  alpha_c/alpha_tau and beta_c/beta_tau are sampled from conjugate full-conditionals given the proposed rat-level values"
+        );
+        println!(
+            "  tau_c is sampled from its Gamma conditional posterior given observed weights and proposed mus"
         );
     }
 
@@ -271,25 +296,7 @@ impl rats::Proposer<rand::rngs::ThreadRng> for RatsProposer {
             log_prob += -(choices as f64).ln();
 
             let (left, right) = pair_from_index(points.len(), pair_index);
-            let (base_alpha, base_beta) = solve_pair(points[left], points[right]);
-            let residual_variance = points
-                .iter()
-                .map(|(x, y)| {
-                    let residual = y - (base_alpha + base_beta * x);
-                    residual * residual
-                })
-                .sum::<f64>()
-                / points.len() as f64;
-
-            let (rat_alpha, rat_beta) = if residual_variance > MIN_NOISE_VARIANCE {
-                let noise_std = (residual_variance / 2.0).sqrt();
-                (
-                    sample_normal(rng, base_alpha, noise_std, &mut log_prob),
-                    sample_normal(rng, base_beta, noise_std, &mut log_prob),
-                )
-            } else {
-                (base_alpha, base_beta)
-            };
+            let (rat_alpha, rat_beta) = solve_pair(points[left], points[right]);
 
             alpha[rat] = Some(rat_alpha);
             beta[rat] = Some(rat_beta);
@@ -302,19 +309,17 @@ impl rats::Proposer<rand::rngs::ThreadRng> for RatsProposer {
             proposed_alphas.len() >= 2,
             "RatsProposer needs at least two proposed rats"
         );
-        let alpha_c = mean(&proposed_alphas);
-        let alpha_std = std_dev(&proposed_alphas, alpha_c);
-        let alpha_tau = precision_from_std_dev(alpha_std);
-        let beta_c = mean(&proposed_betas);
-        let beta_std = std_dev(&proposed_betas, beta_c);
-        let beta_tau = precision_from_std_dev(beta_std);
-        let sigma = (sigma_residuals
+        let (alpha_c, alpha_tau) =
+            sample_population_parameters(rng, &proposed_alphas, &mut log_prob);
+        let (beta_c, beta_tau) = sample_population_parameters(rng, &proposed_betas, &mut log_prob);
+        let residual_sum_squares = sigma_residuals
             .iter()
             .map(|residual| residual * residual)
-            .sum::<f64>()
-            / sigma_residuals.len() as f64)
-            .sqrt();
-        let tau_c = precision_from_std_dev(sigma);
+            .sum::<f64>();
+        let tau_shape = PRECISION_PRIOR_SHAPE + 0.5 * sigma_residuals.len() as f64;
+        let tau_rate = 1.0 / PRECISION_PRIOR_SCALE + 0.5 * residual_sum_squares;
+        let tau_scale = 1.0 / tau_rate;
+        let tau_c = sample_gamma(rng, tau_shape, tau_scale, &mut log_prob);
 
         let mut proposal = rats::Proposal::new(log_prob);
         proposal.tau_c = Some(tau_c);
@@ -340,26 +345,6 @@ fn print_summary(name: &str, values: &[f64], log_weights: &[f64], reference: Opt
     }
 }
 
-fn effective_sample_size(log_weights: &[f64]) -> f64 {
-    let max_log_weight = log_weights
-        .iter()
-        .copied()
-        .fold(f64::NEG_INFINITY, f64::max);
-    let mut sum_weight = 0.0;
-    let mut sum_weight_squared = 0.0;
-    for log_weight in log_weights {
-        let weight = (log_weight - max_log_weight).exp();
-        sum_weight += weight;
-        sum_weight_squared += weight * weight;
-    }
-
-    if sum_weight_squared == 0.0 {
-        0.0
-    } else {
-        sum_weight * sum_weight / sum_weight_squared
-    }
-}
-
 fn print_proposal_coverage() {
     println!("Proposal coverage:");
     println!("  proposed: tau_c, alpha_c, alpha_tau, beta_c, beta_tau");
@@ -371,7 +356,7 @@ fn print_proposal_coverage() {
 fn print_effective_sample_size(run: &RatsRun) {
     println!(
         "effective sample size: {:.1} / {}",
-        effective_sample_size(&run.log_weights),
+        ferric::effective_sample_size(&run.log_weights),
         run.log_weights.len()
     );
 }

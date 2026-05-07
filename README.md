@@ -124,7 +124,8 @@ fn main() {
 
 The `WeightedSample` type nests query variables under `.sample.*` and exposes the metadata
 separately at `.log_weight`, so there is no naming conflict even if a query variable is
-named `log_weight`.
+named `log_weight`.  Use `ferric::effective_sample_size(&log_weights)` to compute ESS
+from collected weighted samples.
 
 ### User-proposal importance sampling — `importance_sampler`
 
@@ -142,6 +143,8 @@ weight as `log p_model(proposed values) - log q(proposed values) + log p(observa
 For diagnostics, `importance_sampler_debug(proposer, n)` traces the first `n` worlds, printing
 the proposal, model-prior terms for proposed values, observed likelihood terms, sampled
 stochastic values, and final log weight before continuing as a normal iterator.
+As with `weighted_sample_iter`, collect the returned `log_weight` values and pass them to
+`ferric::effective_sample_size` to monitor weight degeneracy.
 The rats example also exposes this through `FERRIC_DEBUG_IMPORTANCE`; for example,
 `FERRIC_DEBUG_IMPORTANCE=1 cargo run -p ferric --example rats` traces the first
 importance sample in each rats experiment.

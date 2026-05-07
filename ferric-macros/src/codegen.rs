@@ -283,8 +283,10 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
             ///
             /// The queried variables live in the nested `sample` field so
             /// that `log_weight` can never collide with a user-defined
-            /// random variable name.  Use [`ferric::weighted_mean`] and
-            /// [`ferric::weighted_std`] to compute posterior statistics.
+            /// random variable name.  Use [`ferric::weighted_mean`],
+            /// [`ferric::weighted_std`], and
+            /// [`ferric::effective_sample_size`] to compute posterior
+            /// statistics.
             ///
             /// # Example access pattern
             ///
@@ -385,8 +387,10 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
             /// ```
             ///
             /// Collect the `log_weight` values alongside the queried
-            /// fields and pass them to [`ferric::weighted_mean`] or
-            /// [`ferric::weighted_std`] to obtain posterior estimates.
+            /// fields and pass them to [`ferric::weighted_mean`],
+            /// [`ferric::weighted_std`], or
+            /// [`ferric::effective_sample_size`] to obtain posterior
+            /// estimates.
             ///
             /// # When to use
             ///
