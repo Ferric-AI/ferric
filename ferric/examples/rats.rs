@@ -14,7 +14,7 @@
 //   so this example prints those same four predictions for comparison.
 //
 // Proposer overview:
-// - initialize() copies the available observations for each rat.  It does not
+// - new() copies the available observations for each rat.  It does not
 //   use values removed by the missing-data experiment.
 // - propose() handles every rat with at least two observed weights.  For each
 //   such rat it picks one observed pair uniformly and solves the line through
@@ -241,12 +241,12 @@ fn sample_population_parameters(
 }
 
 impl rats::Proposer<rand::rngs::ThreadRng> for RatsProposer {
-    fn initialize(&mut self, data: &rats::ObservedData) {
+    fn new(data: &rats::ObservedData) -> Self {
         let xs = (0..data.num_times)
             .map(|time| age(time) - data.xbar)
             .collect::<Vec<_>>();
 
-        self.rats = (0..data.num_rats as usize)
+        let rats: Vec<Vec<(f64, f64)>> = (0..data.num_rats as usize)
             .map(|rat| {
                 data.weight[rat]
                     .iter()
@@ -256,8 +256,8 @@ impl rats::Proposer<rand::rngs::ThreadRng> for RatsProposer {
             })
             .collect();
 
-        let eligible_rats = self.rats.iter().filter(|points| points.len() >= 2).count();
-        let observed_weights = self.rats.iter().map(Vec::len).sum::<usize>();
+        let eligible_rats = rats.iter().filter(|points| points.len() >= 2).count();
+        let observed_weights = rats.iter().map(Vec::len).sum::<usize>();
         assert!(
             eligible_rats >= 2,
             "RatsProposer needs at least two rats with at least two observed weights"
@@ -265,7 +265,7 @@ impl rats::Proposer<rand::rngs::ThreadRng> for RatsProposer {
 
         println!(
             "RatsProposer initialized from {observed_weights} observed weights: {eligible_rats}/{} rats have at least two observations",
-            self.rats.len()
+            rats.len()
         );
         println!(
             "  per eligible rat: choose one observed pair uniformly and solve alpha/beta exactly"
@@ -276,6 +276,8 @@ impl rats::Proposer<rand::rngs::ThreadRng> for RatsProposer {
         println!(
             "  tau_c is sampled from its Gamma conditional posterior given observed weights and proposed mus"
         );
+
+        Self { rats }
     }
 
     fn propose(&mut self, rng: &mut rand::rngs::ThreadRng) -> rats::Proposal {
@@ -359,6 +361,66 @@ fn print_effective_sample_size(run: &RatsRun) {
         ferric::effective_sample_size(&run.log_weights),
         run.log_weights.len()
     );
+    print_top_weights(&run.log_weights);
+}
+
+fn print_top_weights(log_weights: &[f64]) {
+    if log_weights.is_empty() {
+        println!("Top 10 weights: no samples");
+        return;
+    }
+
+    if log_weights.iter().any(|log_weight| log_weight.is_nan()) {
+        println!("Top 10 weights: at least one log_weight is NaN");
+        return;
+    }
+
+    let max_log_weight = log_weights
+        .iter()
+        .copied()
+        .fold(f64::NEG_INFINITY, f64::max);
+    if max_log_weight == f64::NEG_INFINITY {
+        println!("Top 10 weights: all log weights are -inf");
+        return;
+    }
+
+    let normalizer = if max_log_weight == f64::INFINITY {
+        log_weights
+            .iter()
+            .filter(|&&log_weight| log_weight == f64::INFINITY)
+            .count() as f64
+    } else {
+        log_weights
+            .iter()
+            .map(|&log_weight| (log_weight - max_log_weight).exp())
+            .sum::<f64>()
+    };
+
+    let mut indexed_log_weights = log_weights.iter().copied().enumerate().collect::<Vec<_>>();
+    indexed_log_weights.sort_by(|(_, left), (_, right)| right.total_cmp(left));
+
+    println!("Top 10 weights:");
+    for (rank, (sample_index, log_weight)) in indexed_log_weights.into_iter().take(10).enumerate() {
+        let shifted_weight = if max_log_weight == f64::INFINITY {
+            if log_weight == f64::INFINITY {
+                1.0
+            } else {
+                0.0
+            }
+        } else {
+            (log_weight - max_log_weight).exp()
+        };
+        let normalized_weight = shifted_weight / normalizer;
+        println!(
+            "  {:2}. sample {:5}: log_weight = {:12.3}, delta_from_max = {:9.3}, shifted = {:10.3e}, normalized = {:10.3e}",
+            rank + 1,
+            sample_index,
+            log_weight,
+            log_weight - max_log_weight,
+            shifted_weight,
+            normalized_weight
+        );
+    }
 }
 
 struct RatsRun {
@@ -372,12 +434,7 @@ struct RatsRun {
     log_weights: Vec<f64>,
 }
 
-fn run_rats(
-    weight: Vec<Vec<Option<f64>>>,
-    num_samples: usize,
-    proposer: RatsProposer,
-    debug_samples: usize,
-) -> RatsRun {
+fn run_rats(weight: Vec<Vec<Option<f64>>>, num_samples: usize, debug_samples: usize) -> RatsRun {
     let model = rats::Model {
         num_rats: 30,
         num_times: 5,
@@ -395,9 +452,9 @@ fn run_rats(
     let mut log_weights = Vec::with_capacity(num_samples);
 
     let sampler = if debug_samples > 0 {
-        model.importance_sampler_debug(proposer, debug_samples)
+        model.importance_sampler_debug::<RatsProposer>(debug_samples)
     } else {
-        model.importance_sampler(proposer)
+        model.importance_sampler::<RatsProposer>()
     };
 
     for sample in sampler.take(num_samples) {
@@ -459,12 +516,7 @@ fn main() {
         "Gelfand rats complete-data model, {} proposal-importance samples",
         num_samples
     );
-    let complete = run_rats(
-        observed_weights(),
-        num_samples,
-        RatsProposer::default(),
-        debug_samples,
-    );
+    let complete = run_rats(observed_weights(), num_samples, debug_samples);
     print_proposal_coverage();
     print_effective_sample_size(&complete);
     println!("Parameters in OpenBUGS order:");
@@ -475,12 +527,7 @@ fn main() {
         "Gelfand rats missing-data model, {} proposal-importance samples",
         num_samples
     );
-    let missing = run_rats(
-        missing_weights(),
-        num_samples,
-        RatsProposer::default(),
-        debug_samples,
-    );
+    let missing = run_rats(missing_weights(), num_samples, debug_samples);
     print_proposal_coverage();
     print_effective_sample_size(&missing);
     println!("Parameters in OpenBUGS order:");

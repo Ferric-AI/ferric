@@ -136,16 +136,16 @@
 //! ```
 //!
 //! User-proposal importance sampling is available through
-//! `importance_sampler(proposer)`. Each generated model module includes an
+//! `importance_sampler::<P>()`. Each generated model module includes an
 //! `ObservedData` struct, a `Proposal` struct, and a `Proposer<R>` trait. Ferric
-//! calls `Proposer::initialize(&ObservedData)` once before sampling so the
+//! calls `Proposer::new(&ObservedData)` once before sampling so the
 //! proposer can build proposal distributions from constants and observations.
 //! Each call to `Proposer::propose` returns proposed latent stochastic values
 //! and their joint proposal `log_prob`; omitted proposal fields are sampled
 //! from the model prior. Ferric then computes
 //! `log p_model(proposed values) - log q(proposed values)` and adds the usual
 //! observation log likelihoods. For diagnostics, generated models also provide
-//! `importance_sampler_debug(proposer, n)`, which prints the proposal, prior
+//! `importance_sampler_debug::<P>(n)`, which prints the proposal, prior
 //! terms for proposed values, observed likelihood terms, sampled stochastic
 //! values, and final log weight for the first `n` worlds. Use
 //! [`effective_sample_size`] on the collected log weights to monitor weight
@@ -444,11 +444,7 @@ pub fn effective_sample_size(log_weights: &[f64]) -> f64 {
         sum_weight_squared += weight * weight;
     }
 
-    if sum_weight_squared == 0.0 {
-        0.0
-    } else {
-        sum_weight * sum_weight / sum_weight_squared
-    }
+    sum_weight * sum_weight / sum_weight_squared
 }
 
 #[cfg(test)]
@@ -522,5 +518,13 @@ mod tests {
     #[test]
     fn effective_sample_size_nan_stays_nan() {
         assert!(effective_sample_size(&[0.0, f64::NAN]).is_nan());
+    }
+
+    #[test]
+    fn effective_sample_size_counts_positive_infinite_weights() {
+        assert_eq!(
+            effective_sample_size(&[f64::INFINITY, 0.0, f64::INFINITY]),
+            2.0
+        );
     }
 }

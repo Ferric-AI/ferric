@@ -16,22 +16,20 @@ fn scalar_importance_sampler_uses_user_proposal() {
     };
 
     struct ProposalFromObservation {
-        proposal_dist: Option<Normal>,
+        proposal_dist: Normal,
     }
 
     impl scalar_importance::Proposer<rand::rngs::ThreadRng> for ProposalFromObservation {
-        fn initialize(&mut self, data: &scalar_importance::ObservedData) {
-            self.proposal_dist = Some(Normal::new(data.b / 5.0, 4.0).unwrap());
+        fn new(data: &scalar_importance::ObservedData) -> Self {
+            Self {
+                proposal_dist: Normal::new(data.b / 5.0, 4.0).unwrap(),
+            }
         }
 
         fn propose(&mut self, rng: &mut rand::rngs::ThreadRng) -> scalar_importance::Proposal {
-            let proposal_dist = self
-                .proposal_dist
-                .as_ref()
-                .expect("Ferric initializes proposers before sampling");
-            let a = proposal_dist.sample(rng);
+            let a = self.proposal_dist.sample(rng);
             let log_prob =
-                <Normal as Distribution<rand::rngs::ThreadRng>>::log_prob(proposal_dist, &a);
+                <Normal as Distribution<rand::rngs::ThreadRng>>::log_prob(&self.proposal_dist, &a);
             let mut proposal = scalar_importance::Proposal::new(log_prob);
             proposal.a = Some(a);
             proposal
@@ -44,9 +42,7 @@ fn scalar_importance_sampler_uses_user_proposal() {
     let mut log_weights = Vec::with_capacity(num_samples);
 
     for ws in model
-        .importance_sampler(ProposalFromObservation {
-            proposal_dist: None,
-        })
+        .importance_sampler::<ProposalFromObservation>()
         .take(num_samples)
     {
         values.push(ws.sample.a);
@@ -74,4 +70,57 @@ fn scalar_importance_sampler_uses_user_proposal() {
     );
     assert!(effective_sample_size > 1.0);
     assert!(effective_sample_size <= num_samples as f64);
+}
+
+#[test]
+fn indexed_deterministic_observation_filters_user_proposal() {
+    make_model! {
+        name indexed_deterministic_importance;
+        use ferric::distributions::Bernoulli;
+
+        const n : u64;
+        let latent[i of n] : bool ~ Bernoulli::new(0.5);
+        let copied[i of n] : bool = latent[i];
+
+        observe copied;
+        query latent;
+    };
+
+    struct MatchingProposal {
+        proposal: Vec<Option<bool>>,
+    }
+
+    impl indexed_deterministic_importance::Proposer<rand::rngs::ThreadRng> for MatchingProposal {
+        fn new(data: &indexed_deterministic_importance::ObservedData) -> Self {
+            Self {
+                proposal: data
+                    .copied
+                    .iter()
+                    .map(|observed| Some(observed.unwrap_or(true)))
+                    .collect(),
+            }
+        }
+
+        fn propose(
+            &mut self,
+            _rng: &mut rand::rngs::ThreadRng,
+        ) -> indexed_deterministic_importance::Proposal {
+            let mut proposal = indexed_deterministic_importance::Proposal::new(0.0);
+            proposal.latent = self.proposal.clone();
+            proposal
+        }
+    }
+
+    let model = indexed_deterministic_importance::Model {
+        n: 3,
+        copied: vec![Some(true), None, Some(false)],
+    };
+
+    let sample = model
+        .importance_sampler::<MatchingProposal>()
+        .next()
+        .unwrap();
+
+    assert_eq!(sample.sample.latent, vec![true, true, false]);
+    assert!(sample.log_weight.is_finite());
 }

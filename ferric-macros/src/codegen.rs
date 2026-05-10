@@ -337,8 +337,8 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
 
             /// Trait implemented by model-specific importance proposers.
             pub trait Proposer<R: rand::Rng> {
-                /// Prepare the proposer from model constants and observations.
-                fn initialize(&mut self, data: &ObservedData);
+                /// Construct the proposer from model constants and observations.
+                fn new(data: &ObservedData) -> Self;
 
                 /// Draw one proposal.  The returned `log_prob` must be the
                 /// joint log probability of all proposed values under the
@@ -413,12 +413,12 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
     let importance_sample_iter_method = quote! {
         /// Returns an iterator of importance-weighted samples using a
         /// user-supplied proposal distribution.
-        pub fn importance_sample_iter<P>(&self, mut proposer: P) -> ImportanceWorld<rand::rngs::ThreadRng, P>
+        pub fn importance_sample_iter<P>(&self) -> ImportanceWorld<rand::rngs::ThreadRng, P>
         where
             P: Proposer<rand::rngs::ThreadRng>,
         {
             let observed_data = self.observed_data();
-            proposer.initialize(&observed_data);
+            let proposer = P::new(&observed_data);
             ImportanceWorld {
                 world: World::new(
                     rand::thread_rng(),
@@ -432,11 +432,11 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         }
 
         /// Alias for [`Model::importance_sample_iter`].
-        pub fn importance_sampler<P>(&self, proposer: P) -> ImportanceWorld<rand::rngs::ThreadRng, P>
+        pub fn importance_sampler<P>(&self) -> ImportanceWorld<rand::rngs::ThreadRng, P>
         where
             P: Proposer<rand::rngs::ThreadRng>,
         {
-            self.importance_sample_iter(proposer)
+            self.importance_sample_iter::<P>()
         }
 
         /// Returns an importance-sampling iterator that prints a detailed
@@ -448,14 +448,13 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         /// traced prefix, the iterator continues without printing.
         pub fn importance_sample_iter_debug<P>(
             &self,
-            mut proposer: P,
             samples_to_trace: usize,
         ) -> ImportanceWorld<rand::rngs::ThreadRng, P>
         where
             P: Proposer<rand::rngs::ThreadRng>,
         {
             let observed_data = self.observed_data();
-            proposer.initialize(&observed_data);
+            let proposer = P::new(&observed_data);
             ImportanceWorld {
                 world: World::new(
                     rand::thread_rng(),
@@ -471,13 +470,12 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
         /// Alias for [`Model::importance_sample_iter_debug`].
         pub fn importance_sampler_debug<P>(
             &self,
-            proposer: P,
             samples_to_trace: usize,
         ) -> ImportanceWorld<rand::rngs::ThreadRng, P>
         where
             P: Proposer<rand::rngs::ThreadRng>,
         {
-            self.importance_sample_iter_debug(proposer, samples_to_trace)
+            self.importance_sample_iter_debug::<P>(samples_to_trace)
         }
     };
 
