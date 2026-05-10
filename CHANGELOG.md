@@ -6,20 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.1] - 2026-05-10
 
-- Refactored `Proposer` trait: replaced mutable `initialize(&mut self, data: &ObservedData)`
-  with an associated constructor `new(data: &ObservedData) -> Self`, removing the need for
-  `Option`-wrapped fields in proposer structs.
-- Updated `importance_sample_iter`, `importance_sampler`, `importance_sample_iter_debug`, and
-  `importance_sampler_debug` to infer the proposer type via turbofish (`<P>()`) instead of
-  accepting a pre-built proposer value.
-- Added `print_top_weights` diagnostic to the rats example, printing the top-10 normalized
-  importance weights alongside ESS after each run.
-- Fixed `effective_sample_size` to correctly count samples with positive-infinite log weights
-  instead of returning zero.
-- Added integration test `indexed_deterministic_observation_filters_user_proposal` covering
-  deterministic observed variables with an indexed user-proposal importance sampler.
-- Updated crate-level documentation and README examples to reflect the new `Proposer::new`
-  constructor API and turbofish call sites.
+- Changed `Proposer` trait: `initialize(&mut self, data)` is replaced by an associated
+  constructor `fn new(data: &ObservedData) -> Self`.
+- `importance_sampler`, `importance_sample_iter`, and their debug variants no longer accept
+  a pre-built proposer value; use turbofish syntax instead: `model.importance_sampler::<MyProposer>()`.
 
 ## [0.2.0] - 2026-05-04
 
