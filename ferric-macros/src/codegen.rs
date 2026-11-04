@@ -26,7 +26,16 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
     let mut const_new_inits = Vec::<TokenStream>::new();
     let mut const_model_args = Vec::<TokenStream>::new();
 
-    for konst in ir.consts.values() {
+    // Iterate constants and variables in declaration order, never HashMap
+    // order, so generated code is the same on every build.  For variables it
+    // also matters for correctness: `apply_proposal` must pin an index bound
+    // before the cells it sizes, and analysis guarantees bounds are declared
+    // first.
+    let mut ordered_consts: Vec<&ConstantIR> = ir.consts.values().collect();
+    ordered_consts.sort_by_key(|konst| konst.order);
+    let ordered_variables = variables_in_declaration_order(&ir.variables);
+
+    for konst in ordered_consts {
         let const_ident = &konst.const_ident;
         let field_ident = const_field_ident(konst);
         let ty = &konst.type_ident;
@@ -70,7 +79,7 @@ pub fn codegen(ir: ModelIR) -> TokenStream {
     let mut trace_det_observation_checks = Vec::<TokenStream>::new();
 
     // process all the variables in the model
-    for variable in ir.variables.values() {
+    for variable in ordered_variables {
         let var_ident = format_ident!("var_{}", &variable.var_ident);
         let eval_var = format_ident!("eval_{}", &variable.var_ident);
         let value_type = value_type(&variable.type_ident, variable.indices.len());
@@ -1879,9 +1888,15 @@ fn active_label_for(variable: &VariableIR) -> String {
     }
 }
 
+fn variables_in_declaration_order(variables: &HashMap<String, VariableIR>) -> Vec<&VariableIR> {
+    let mut ordered: Vec<&VariableIR> = variables.values().collect();
+    ordered.sort_by_key(|variable| variable.order);
+    ordered
+}
+
 fn active_eval_method_for(variables: &HashMap<String, VariableIR>) -> TokenStream {
     let mut checks = Vec::<TokenStream>::new();
-    for variable in variables.values() {
+    for variable in variables_in_declaration_order(variables) {
         let var_ident = format_ident!("var_{}", variable.var_ident);
         let label = variable.var_ident.to_string();
         if variable.indices.is_empty() {

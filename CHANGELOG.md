@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Fixed user-proposal importance sampling pinning variables in an order that
+  changed between builds; a proposed index bound is now always pinned before
+  the cells it sizes.
+
 ## [0.2.1] - 2026-05-10
 
 - Changed `Proposer` trait: `initialize(&mut self, data)` is replaced by an associated

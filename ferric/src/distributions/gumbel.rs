@@ -98,7 +98,7 @@ mod tests {
         }
         let empirical_mean = total / trials as f64;
         // Mean = mu + beta * Euler–Mascheroni constant ≈ mu + beta * 0.5772
-        let expected_mean = mu + beta * 0.577_215_664_9;
+        let expected_mean = mu + beta * std::f64::consts::EULER_GAMMA;
         // Std = beta * pi / sqrt(6)
         let std = beta * std::f64::consts::PI / 6.0f64.sqrt();
         let err = 5.0 * std / (trials as f64).sqrt();
