@@ -209,13 +209,12 @@ impl urn_is::Proposer<R> for ProposeCountAndCells {
     }
 }
 
-/// Fails in some builds and passes in others.  `apply_proposal` pins
-/// variables in `HashMap` iteration order inside the proc macro, which changes
-/// from one compile to the next.  When `true_blue` is pinned before `n`, its
-/// cache is sized by a prior draw of `n`, the proposed `n` then overwrites it,
-/// and a proposed count larger than the prior draw indexes out of bounds.
+/// Regression test: `apply_proposal` used to pin variables in `HashMap`
+/// order inside the proc macro, which changed from one compile to the next.
+/// When `true_blue` was pinned before `n`, its cache was sized by a prior draw
+/// of `n` and a larger proposed count indexed out of bounds.  Pins now follow
+/// declaration order, so the count is always pinned first.
 #[test]
-#[ignore = "build-dependent: proposal pin order follows HashMap order in ferric-macros"]
 fn proposing_count_and_cells_matches_exact_posterior() {
     let est = estimate(
         model()
